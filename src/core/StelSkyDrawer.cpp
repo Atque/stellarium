@@ -128,7 +128,7 @@ StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 		unsigned char* elem = &textureCoordArray[i*6*2];
 		memcpy(elem, texElems, 12);
 	}
-	texImgHalo=QImage(StelFileMgr::getInstallationDir()+"/textures/star16x16.png");
+	texImgHalo=QImage(StelFileMgr::getInstallationDir()+"/textures/star64x64.png");
 	texImgHaloSpiky=QImage(StelFileMgr::getInstallationDir()+"/textures/star16x16_rays.png");
 }
 
@@ -349,15 +349,15 @@ bool StelSkyDrawer::computeRCMag(float mag, RCMag* rcMag) const
 
 	// if size of star is too small (blink) we put its size to 1.2 --> no more blink
 	// And we compensate the difference of brighteness with cmag
-	if (rcMag->radius<1.2f)
+	if (rcMag->radius<2.5f)
 	{
-		rcMag->luminance= rcMag->radius * rcMag->radius * rcMag->radius / 1.728f;
+		rcMag->luminance= rcMag->radius * rcMag->radius * rcMag->radius / 2.5f;
 		if (rcMag->luminance < 0.05f)
 		{
 			rcMag->radius = rcMag->luminance = 0.f;
 			return false;
 		}
-		rcMag->radius = 1.2f;
+		rcMag->radius = 2.5f;
 	}
 	else
 	{

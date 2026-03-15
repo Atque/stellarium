@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>500</width>
+    <width>415</width>
     <height>620</height>
    </rect>
   </property>
@@ -772,6 +772,40 @@
              <widget class="QToolButton" name="btnAddSaros">
               <property name="toolTip">
                <string>Add 1 saros (223 synodic months ≈ 18 years 11 days)</string>
+              </property>
+              <property name="text">
+               <string notr="true">▶</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="1" column="0">
+           <layout class="QHBoxLayout">
+            <item>
+             <widget class="QToolButton" name="btnSubFullMoonCycle">
+              <property name="toolTip">
+               <string>Subtract 1 Full Moon cycle (≈ 411.7 days)</string>
+              </property>
+              <property name="text">
+               <string notr="true">◀</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>Full Moon cycle</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btnAddFullMoonCycle">
+              <property name="toolTip">
+               <string>Add 1 Full Moon cycle (≈ 411.7 days)</string>
               </property>
               <property name="text">
                <string notr="true">▶</string>

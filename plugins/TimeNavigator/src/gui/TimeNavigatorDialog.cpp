@@ -119,6 +119,8 @@ void TimeNavigatorDialog::createDialogContent()
 	connect(ui->btnAddMetonicCycle, &QToolButton::clicked, core, &StelCore::addMetonicCycle);
 	connect(ui->btnSubSaros,        &QToolButton::clicked, core, &StelCore::subtractSaros);
 	connect(ui->btnAddSaros,        &QToolButton::clicked, core, &StelCore::addSaros);
+	connect(ui->btnSubFullMoonCycle,        &QToolButton::clicked, core, &StelCore::subtractFullMoonCycle);
+	connect(ui->btnAddFullMoonCycle,        &QToolButton::clicked, core, &StelCore::addFullMoonCycle);
 
 	// ── Tab: Specific Time ───────────────────────────────────────────────
 

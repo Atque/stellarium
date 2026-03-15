@@ -724,6 +724,9 @@ public slots:
 	//! Add one Gaussian year to the simulation time. The Gaussian Year is 365.2568983 days, and is C.F.Gauss's value for the Sidereal Year.
 	//! Note that 1 GaussY=2 &pi;/k where k is the Gaussian gravitational constant. A massless body orbits one solar mass in 1AU distance in a Gaussian Year.
 	void addGaussianYear();
+	
+	//! Add one Full Moon cycle (411 days 18 hours 49 minutes 35 seconds)
+	void addFullMoonCycle();
 
 	//! Subtract one synodic month from the simulation time.
 	void subtractSynodicMonth();
@@ -776,6 +779,9 @@ public slots:
 
 	//! Subtract one Gaussian year from the simulation time.
 	void subtractGaussianYear();
+	
+	//! Subtract one Full Moon cycle (411 days 18 hours 49 minutes 35 seconds)
+	void subtractFullMoonCycle();
 
 	//! Add a number of Earth Solar days to the current simulation time
 	//! @param d the decimal number of days to add (use negative values to subtract)

@@ -103,6 +103,7 @@ StelGui::StelGui()
 	, buttonQuit(nullptr)
 	, flagShowGotoSelectedObjectButton(true)
 	, buttonGotoSelectedObject(nullptr)
+	, buttonMountMode(nullptr)
 	, locationDialog(nullptr)
 	, helpDialog(nullptr)
 	, dateTimeDialog(nullptr)
@@ -338,7 +339,56 @@ void StelGui::init(QGraphicsWidget *atopLevelGraphicsWidget)
 	addButtonOnBottomBar("btPlanets", "actionShow_Planets_Labels", groupName);
 	// Buttons for manage other stuff
 	groupName = "060-othersGroup";
-	addButtonOnBottomBar("btEquatorialMount", "actionSwitch_Equatorial_Mount", groupName);
+	// Single trigger button cycling through all four mount modes via Ctrl+M /
+	// actionSwitch_Equatorial_Mount.  Its icon is swapped live by setActivePixmap()
+	// to always reflect the active mode.
+	//
+	// Pixmap naming convention (32x32, same style as btEquatorialMount-on/off):
+	//   btMountMode-altaz.png        AltAzimuthal
+	//   btMountMode-equatorial.png   Equatorial of date
+	//   btMountMode-ecliptic.png     Ecliptic of date
+	//   btMountMode-galactic.png     Galactic
+	//
+	// If a file is missing we fall back to the existing equatorial-mount icons so
+	// the button is always visible during development.
+	{
+		// Helper: load with fallback
+		auto loadPx = [](const QString& name, const QString& fallback) -> QPixmap {
+			QPixmap px(name);
+			return px.isNull() ? QPixmap(fallback) : px;
+		};
+		const QString fb_on  = ":/graphicGui/btEquatorialMount-on.png";
+		const QString fb_off = ":/graphicGui/btEquatorialMount-off.png";
+
+		// Indexed by StelMovementMgr::MountMode enum value:
+		//   0=AltAzimuthal  1=EquinoxEquatorial  2=Galactic  3=Supergalactic  4=EquinoxEcliptical
+		mountModePixmaps.resize(5);
+		mountModePixmaps[0] = loadPx(":/graphicGui/btMountMode-altaz.png",      fb_off);
+		mountModePixmaps[1] = loadPx(":/graphicGui/btMountMode-equatorial.png", fb_on);
+		mountModePixmaps[2] = loadPx(":/graphicGui/btMountMode-galactic.png",   fb_on);
+		mountModePixmaps[3] = loadPx(":/graphicGui/btMountMode-galactic.png",   fb_on); // supergalactic reuses galactic icon
+		mountModePixmaps[4] = loadPx(":/graphicGui/btMountMode-ecliptic.png",   fb_on);
+
+		QPixmap pxmapGlow(":/graphicGui/miscGlow32x32.png");
+
+		// Construct as a plain trigger button (non-checkable); we drive the icon manually.
+		const int initMode = static_cast<int>(GETSTELMODULE(StelMovementMgr)->getMountMode());
+		buttonMountMode = new StelButton(nullptr,
+		                                 mountModePixmaps[initMode], // pixOn  (unused for trigger)
+		                                 mountModePixmaps[initMode], // pixOff (shown when checked==0)
+		                                 pxmapGlow,
+		                                 "actionSwitch_Equatorial_Mount");
+		skyGui->bottomBar->addButton(buttonMountMode, groupName);
+
+		// Keep the icon in sync whenever the mount mode changes.
+		StelMovementMgr* mmgr = GETSTELMODULE(StelMovementMgr);
+		connect(mmgr, &StelMovementMgr::mountModeChanged, this,
+		        [this](StelMovementMgr::MountMode m) {
+			const int idx = static_cast<int>(m);
+			if (idx >= 0 && idx < mountModePixmaps.size())
+				buttonMountMode->setActivePixmap(mountModePixmaps[idx]);
+		});
+	}
 
 	// A "special" buttons
 	pxmapOn = QPixmap(":/graphicGui/btGotoSelectedObject-on.png");

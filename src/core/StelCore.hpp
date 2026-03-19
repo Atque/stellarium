@@ -260,6 +260,10 @@ public:
 	Vec3d j2000ToEquinoxEqu(const Vec3d& v, RefractionMode refMode=RefractionAuto) const;
 	Vec3d j2000ToGalactic(const Vec3d& v) const;
 	Vec3d j2000ToSupergalactic(const Vec3d& v) const;
+	//! Transform vector from J2000 equatorial to observer-centric ecliptic of date.
+	Vec3d j2000ToEclipticOfDate(const Vec3d& v) const;
+	//! Transform vector from observer-centric ecliptic of date back to J2000 equatorial.
+	Vec3d eclipticOfDateToJ2000(const Vec3d& v) const;
 
 	//! Transform vector from heliocentric ecliptic coordinate to altazimuthal
 	Vec3d heliocentricEclipticToAltAz(const Vec3d& v, RefractionMode refMode=RefractionAuto) const;

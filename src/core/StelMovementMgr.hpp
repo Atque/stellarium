@@ -106,9 +106,8 @@ class StelMovementMgr : public StelModule
 		   NOTIFY currentFovChanged)
 public:
 	//! Possible mount modes defining the reference frame in which head movements occur.
-	//! MountGalactic and MountSupergalactic is currently only available via scripting API: core.clear("galactic") and core.clear("supergalactic")
-	// TODO: add others: MountEcliptical, MountEq2000, MountEcliptical2000 and implement proper variants.
-	enum MountMode { MountAltAzimuthal, MountEquinoxEquatorial, MountGalactic, MountSupergalactic};
+	//! MountGalactic and MountSupergalactic are also available via scripting API: core.clear("galactic") and core.clear("supergalactic")
+	enum MountMode { MountAltAzimuthal, MountEquinoxEquatorial, MountGalactic, MountSupergalactic, MountEquinoxEcliptical};
 	Q_ENUM(MountMode)
 
 	//! Named constants for zoom operations.
@@ -186,8 +185,11 @@ public slots:
 	// UNUSED, but scriptable
 	//! Toggle current mount mode between equatorial and altazimuthal
 	void toggleMountMode() {if (getMountMode()==MountAltAzimuthal) setMountMode(MountEquinoxEquatorial); else setMountMode(MountAltAzimuthal);}
-	//! Define whether we should use equatorial mount or altazimuthal
+	//! Define whether we should use equatorial mount or altazimuthal (scripting/property compatibility).
 	void setEquatorialMount(bool b);
+	//! Cycle through all mount modes in order:
+	//! AltAzimuthal → EquinoxEquatorial → EquinoxEcliptical → Galactic → AltAzimuthal → …
+	void cycleAllMountModes();
 
 	//! Set object tracking on/off and go to selected object
 	void setFlagTracking(bool b=true);
@@ -473,6 +475,8 @@ signals:
 	//! Emitted when the tracking property changes
 	void flagTrackingChanged(bool b);
 	void equatorialMountChanged(bool b);
+	//! Emitted whenever the mount mode changes (carries the new mode).
+	void mountModeChanged(StelMovementMgr::MountMode m);
 	void flagIndicationMountModeChanged(bool b);
 	void flagAutoZoomOutResetsDirectionChanged(bool b);
 	void viewportHorizontalOffsetTargetChanged(double f);

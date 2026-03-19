@@ -120,7 +120,8 @@ public:
 		galactic,
 		supergalactic,
 		ecliptic,
-		eclipticJ2000
+		eclipticJ2000,
+		eclipticOfDate
 	};
 	Q_ENUM(CoordinateSystem)
 

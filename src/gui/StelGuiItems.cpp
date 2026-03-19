@@ -344,6 +344,23 @@ void StelButton::setChecked(int b)
 	updateIcon();
 }
 
+void StelButton::setActivePixmap(const QPixmap& rawPixmap)
+{
+	// Apply the same treatment as initCtor: brightness tweak then scale.
+	const float brightenFactor = qBound(1.f,
+		StelApp::getInstance().getSettings()->value("gui/pixmaps_brightness", 1.0).toFloat(), 1.8f);
+	QImage img = rawPixmap.toImage();
+	brightenImage(img, brightenFactor);
+	pixOff = QPixmap::fromImage(img);
+	if (pixmapsScale && pixmapsScale != GUI_INPUT_PIXMAPS_SCALE)
+	{
+		const auto scale = pixmapsScale / GUI_INPUT_PIXMAPS_SCALE;
+		pixOff = pixOff.scaled(pixOff.size()*scale, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+	}
+	pixOff.setDevicePixelRatio(pixmapsScale ? pixmapsScale : GUI_INPUT_PIXMAPS_SCALE);
+	updateIcon();
+}
+
 void StelButton::setBackgroundPixmap(const QPixmap &newBackground)
 {
 	pixBackground = newBackground;

@@ -902,6 +902,21 @@ Vec3d StelCore::j2000ToSupergalactic(const Vec3d& v) const
 	return matJ2000ToSupergalactic*v;
 }
 
+Vec3d StelCore::j2000ToEclipticOfDate(const Vec3d& v) const
+{
+	// matJ2000ToEquinoxEqu takes J2000 → equatorial-of-date.
+	// xrotation(-eps_A) then tilts the equatorial frame into ecliptic-of-date
+	// (ecliptic pole at +Z). Note the sign: xrotation(+eps_A) is ecliptic→equatorial,
+	// so the inverse (equatorial→ecliptic) requires -eps_A.
+	return Mat4d::xrotation(-getPrecessionAngleVondrakCurrentEpsilonA()) * (matJ2000ToEquinoxEqu * v);
+}
+
+Vec3d StelCore::eclipticOfDateToJ2000(const Vec3d& v) const
+{
+	// Reverse: undo obliquity tilt (+eps_A), then rotate back to J2000.
+	return matEquinoxEquDateToJ2000 * (Mat4d::xrotation(getPrecessionAngleVondrakCurrentEpsilonA()) * v);
+}
+
 //! Transform vector from heliocentric ecliptic coordinate to altazimuthal
 Vec3d StelCore::heliocentricEclipticToAltAz(const Vec3d& v, RefractionMode refMode) const
 {

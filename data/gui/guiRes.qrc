@@ -205,5 +205,9 @@
         <file>uieScrolldown.png</file>
         <file>uieScrollleft.png</file>
         <file>uieScrollright.png</file>
+        <file>btMountMode-altaz.png</file>
+	<file>btMountMode-equatorial.png</file>
+	<file>btMountMode-ecliptic.png</file>
+	<file>btMountMode-galactic.png</file>
     </qresource>
 </RCC>

@@ -178,6 +178,12 @@ void StelMovementMgr::init()
 	QString tmpstr = conf->value("navigation/viewing_mode", "horizon").toString();
 	if (tmpstr.contains("equator", Qt::CaseInsensitive))
 		setMountMode(StelMovementMgr::MountEquinoxEquatorial);
+	else if (tmpstr.contains("galactic", Qt::CaseInsensitive))
+		setMountMode(StelMovementMgr::MountGalactic);
+	else if (tmpstr.contains("supergalactic", Qt::CaseInsensitive))
+		setMountMode(StelMovementMgr::MountSupergalactic);
+	else if (tmpstr.contains("ecliptic", Qt::CaseInsensitive))
+		setMountMode(StelMovementMgr::MountEquinoxEcliptical);
 	else
 	{
 		if (tmpstr.contains("horizon", Qt::CaseInsensitive))
@@ -191,7 +197,9 @@ void StelMovementMgr::init()
 	resetInitViewPos();
 
 	QString movementGroup = N_("Movement and Selection");
-	addAction("actionSwitch_Equatorial_Mount", N_("Miscellaneous"), N_("Switch between equatorial and azimuthal mount"), "equatorialMount", "Ctrl+M");
+	addAction("actionSwitch_Equatorial_Mount", N_("Miscellaneous"),
+	          N_("Cycle mount mode (AltAz / Equatorial / Ecliptic / Galactic)"),
+	          "cycleAllMountModes()", "Ctrl+M");
 	addAction("actionGoto_Selected_Object", movementGroup, N_("Center on selected object"), "tracking", "Space");
 	addAction("actionGoto_Deselection", movementGroup, N_("Deselect the selected object"), "deselection()", "Ctrl+Space");
         addAction("actionGoto_ReSelect_Last_Selected_Object", movementGroup, N_("Re-select last selected object"), "reSelectLastObject()", "Shift+Space");
@@ -281,7 +289,12 @@ void StelMovementMgr::bindingFOVActions()
 void StelMovementMgr::setEquatorialMount(bool b)
 {
 	const MountMode mm=getMountMode();
+	// Only act on the AltAz <-> Equatorial toggle; leave extended modes (galactic, ecliptic) untouched.
 	if ((mm==MountEquinoxEquatorial && b) || (mm==MountAltAzimuthal && !b))
+		return;
+	// If an extended mode is active and the user presses the AltAz/Eq button, do nothing —
+	// the extended-mount button should be used to leave those modes.
+	if (mm==MountGalactic || mm==MountSupergalactic || mm==MountEquinoxEcliptical)
 		return;
 
 	setMountMode(b ? MountEquinoxEquatorial : MountAltAzimuthal);
@@ -305,6 +318,52 @@ void StelMovementMgr::setEquatorialMount(bool b)
 	}
 }
 
+void StelMovementMgr::cycleAllMountModes()
+{
+	// 4-way cycle: AltAzimuthal → EquinoxEquatorial → EquinoxEcliptical → Galactic → AltAzimuthal → …
+	// The ordering goes from most observer-local to most cosmological.
+	static const MountMode order[] = {
+		MountAltAzimuthal,
+		MountEquinoxEquatorial,
+		MountEquinoxEcliptical,
+		MountGalactic
+	};
+	static const char* configStr[] = { "horizon", "equator", "ecliptic", "galactic" };
+	static const int N = 4;
+
+	// Find current position in the cycle (default to 0 if an unusual mode is active)
+	int idx = 0;
+	for (int i = 0; i < N; ++i)
+		if (order[i] == getMountMode()) { idx = i; break; }
+
+	const int nextIdx  = (idx + 1) % N;
+	const MountMode next = order[nextIdx];
+
+	setMountMode(next);
+	StelApp::immediateSave("navigation/viewing_mode", configStr[nextIdx]);
+
+	if (getFlagIndicationMountMode())
+	{
+		QString label;
+		switch (next)
+		{
+			case MountAltAzimuthal:      label = qc_("Alt-azimuth mount",  "mount mode"); break;
+			case MountEquinoxEquatorial: label = qc_("Equatorial mount",   "mount mode"); break;
+			case MountEquinoxEcliptical: label = qc_("Ecliptic mount",     "mount mode"); break;
+			case MountGalactic:          label = qc_("Galactic mount",     "mount mode"); break;
+			default:                     label = qc_("Alt-azimuth mount",  "mount mode"); break;
+		}
+		if (lastMessageID)
+			GETSTELMODULE(LabelMgr)->deleteLabel(lastMessageID);
+		StelProjector::StelProjectorParams projectorParams = StelApp::getInstance().getCore()->getCurrentStelProjectorParams();
+		StelPainter painter(StelApp::getInstance().getCore()->getProjection2d());
+		int yPositionOffset = qRound(projectorParams.viewportXywh[3]*projectorParams.viewportCenterOffset[1]);
+		int xPosition = qRound(projectorParams.viewportCenter[0] - painter.getFontMetrics().boundingRect(label).width()/2);
+		int yPosition = qRound(projectorParams.viewportCenter[1] - yPositionOffset - painter.getFontMetrics().height()/2);
+		lastMessageID = GETSTELMODULE(LabelMgr)->labelScreen(label, xPosition, yPosition, true, StelApp::getInstance().getScreenFontSize() + 3, "#99FF99", true, 2000);
+	}
+}
+
 void StelMovementMgr::setMountMode(MountMode m)
 {
 	mountMode = m;
@@ -313,6 +372,7 @@ void StelMovementMgr::setMountMode(MountMode m)
 	//setViewUpVector(Vec3d(0., 0., 1.));
 	//setViewUpVectorJ2000(Vec3d(0., 0., 1.)); // Looks wrong on start.
 	emit equatorialMountChanged(m==MountEquinoxEquatorial);
+	emit mountModeChanged(m);
 }
 
 void StelMovementMgr::setFlagLockEquPos(bool b)
@@ -1117,6 +1177,9 @@ void StelMovementMgr::updateVisionVector(double deltaTime)
 				case MountSupergalactic:
 					v = move.targetObject->getSupergalacticPos(core);
 					break;
+				case MountEquinoxEcliptical:
+					v = move.targetObject->getEclipticOfDatePos(core);
+					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;
 					Q_ASSERT(0);
@@ -1239,6 +1302,9 @@ void StelMovementMgr::updateVisionVector(double deltaTime)
 					break;
 				case MountSupergalactic:
 					v = objectMgr->getSelectedObject()[0]->getSupergalacticPos(core);
+					break;
+				case MountEquinoxEcliptical:
+					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePos(core);
 					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;
@@ -1516,6 +1582,8 @@ Vec3d StelMovementMgr::j2000ToMountFrame(const Vec3d& v) const
 			return core->j2000ToGalactic(v);
 		case MountSupergalactic:
 			return core->j2000ToSupergalactic(v);
+		case MountEquinoxEcliptical:
+			return core->j2000ToEclipticOfDate(v);
 	}
 	Q_ASSERT(0);
 	return Vec3d(0.);
@@ -1533,6 +1601,8 @@ Vec3d StelMovementMgr::mountFrameToJ2000(const Vec3d& v) const
 			return core->galacticToJ2000(v);
 		case MountSupergalactic:
 			return core->supergalacticToJ2000(v);
+		case MountEquinoxEcliptical:
+			return core->eclipticOfDateToJ2000(v);
 	}
 	Q_ASSERT(0);
 	return Vec3d(0.);
@@ -1688,6 +1758,9 @@ void StelMovementMgr::updateAutoZoom(double deltaTime)
 					break;
 				case MountSupergalactic:
 					v = objectMgr->getSelectedObject()[0]->getSupergalacticPos(core);
+					break;
+				case MountEquinoxEcliptical:
+					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePos(core);
 					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;

@@ -101,6 +101,12 @@ Vec3d StelObject::getSupergalacticPos(const StelCore *core) const
 	return core->j2000ToSupergalactic(getJ2000EquatorialPos(core));
 }
 
+// Get observer-centered ecliptic-of-date position
+Vec3d StelObject::getEclipticOfDatePos(const StelCore *core) const
+{
+	return core->j2000ToEclipticOfDate(getJ2000EquatorialPos(core));
+}
+
 // Get parallactic angle, which is the deviation between zenith angle and north angle.
 // Meeus, Astronomical Algorithms, 2nd ed. (1998), p.98.
 float StelObject::getParallacticAngle(const StelCore* core) const

@@ -157,6 +157,10 @@ public slots:
 	//! set whether the button is checked
 	void setChecked(int b);
 	void setChecked(bool b) { setChecked(static_cast<int>(b)); }
+	//! Replace the displayed icon for a trigger (non-checkable) button.
+	//! Applies the same brightness/scale treatment as the constructor.
+	//! Call this whenever the logical state the button represents changes.
+	void setActivePixmap(const QPixmap& rawPixmap);
 	void updateIcon();
 
 protected:

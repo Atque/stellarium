@@ -1439,10 +1439,19 @@ void ConfigurationDialog::saveAllSettings()
         conf->setValue("localization/date_display_format",              localeManager.getDateFormatStr());
 
 
-	if (mvmgr->getMountMode() == StelMovementMgr::MountAltAzimuthal)
-		conf->setValue("navigation/viewing_mode", "horizon");
-	else
-		conf->setValue("navigation/viewing_mode", "equator");
+	switch (mvmgr->getMountMode())
+	{
+		case StelMovementMgr::MountAltAzimuthal:
+			conf->setValue("navigation/viewing_mode", "horizon");      break;
+		case StelMovementMgr::MountEquinoxEquatorial:
+			conf->setValue("navigation/viewing_mode", "equator");      break;
+		case StelMovementMgr::MountGalactic:
+			conf->setValue("navigation/viewing_mode", "galactic");     break;
+		case StelMovementMgr::MountSupergalactic:
+			conf->setValue("navigation/viewing_mode", "supergalactic"); break;
+		case StelMovementMgr::MountEquinoxEcliptical:
+			conf->setValue("navigation/viewing_mode", "ecliptic");     break;
+	}
 
 	// configuration dialog / tools tab
         conf->setValue("gui/flag_show_flip_buttons",                    propMgr->getStelPropertyValue("StelGui.flagShowFlipButtons").toBool());

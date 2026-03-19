@@ -331,6 +331,7 @@ void SearchDialog::populateCoordinateSystemsList()
 	csys->addItem(qc_("Supergalactic", "coordinate system"), "supergalactic");
 	csys->addItem(qc_("Ecliptic", "coordinate system"), "ecliptic");
 	csys->addItem(qc_("Ecliptic (J2000.0)", "coordinate system"), "eclipticJ2000");
+	csys->addItem(qc_("Ecliptic of Date", "coordinate system"), "eclipticOfDate");
 
 	//Restore the selection
 	index = csys->findData(selectedSystemId, Qt::UserRole, Qt::MatchCaseSensitive);
@@ -388,6 +389,7 @@ void SearchDialog::populateCoordinateAxis()
 		}
 		case ecliptic:
 		case eclipticJ2000:
+		case eclipticOfDate:
 		case galactic:
 		case supergalactic:
 		{
@@ -820,6 +822,13 @@ void SearchDialog::setCenterOfScreenCoordinates()
 			spinLat = beta;
 			break;
 		}
+		case eclipticOfDate:
+		{
+			// Use the built-in converter: ecliptic-of-date longitude/latitude directly.
+			StelUtils::rectToSphe(&spinLong, &spinLat, core->j2000ToEclipticOfDate(centerPos));
+			if (spinLong<0) spinLong+=2.0*M_PI;
+			break;
+		}
 	}
 
 	// Block spinbox signals locally, just until end of method.
@@ -934,6 +943,18 @@ void SearchDialog::manualPositionChanged()
 			StelUtils::eclToEqu(spinLong, spinLat, GETSTELMODULE(SolarSystem)->getEarth()->getRotObliquity(core->getJDE()), &ra, &dec);
 			StelUtils::spheToRect(ra, dec, pos);
 			pos = core->equinoxEquToJ2000(pos, StelCore::RefractionOff);
+			break;
+		}
+		case eclipticOfDate:
+		{
+			StelUtils::spheToRect(spinLong, spinLat, pos);
+			pos = core->eclipticOfDateToJ2000(pos);
+			if ( (mountMode==StelMovementMgr::MountEquinoxEcliptical) && (fabs(spinLat)> (0.9*M_PI_2)) )
+			{
+				// make up vector more stable near the ecliptic poles.
+				mvmgr->setViewUpVector(Vec3d(-cos(spinLong), -sin(spinLong), 0.) * (spinLat>0. ? 1. : -1. ));
+				aimUp=mvmgr->getViewUpVectorJ2000();
+			}
 			break;
 		}
 	}

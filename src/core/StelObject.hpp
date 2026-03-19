@@ -430,6 +430,9 @@ public:
 	//! Get observer-centered supergalactic coordinates
 	Vec3d getSupergalacticPos(const StelCore* core) const;
 
+	//! Get observer-centered ecliptic-of-date coordinates (ecliptic pole at +Z).
+	Vec3d getEclipticOfDatePos(const StelCore* core) const;
+
 	//! Get observer-centered hour angle + declination (at current equinox)
 	//! It is the geometric position, i.e. without taking refraction effect into account.
 	//! The frame has its Z axis at the planet's current rotation axis

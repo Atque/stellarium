@@ -28,6 +28,7 @@
 #include "StelStyle.hpp"
 
 #include <QGraphicsTextItem>
+#include <QVector>
 
 class QGraphicsSceneMouseEvent;
 class QTimeLine;
@@ -365,6 +366,13 @@ private:
 
 	bool flagShowGotoSelectedObjectButton;
 	StelButton* buttonGotoSelectedObject;
+
+	//! Single trigger button that cycles through all four mount modes.
+	//! Its displayed icon is swapped live via setActivePixmap() to reflect the current mode.
+	StelButton* buttonMountMode;
+	//! Pixmaps for each MountMode, indexed by MountMode enum value.
+	//! Order: [0]=AltAz  [1]=Equatorial  [2]=Galactic  [3]=Supergalactic  [4]=EclipticOfDate
+	QVector<QPixmap> mountModePixmaps;
 
 	LocationDialog* locationDialog;
 	HelpDialog* helpDialog;

@@ -1172,13 +1172,13 @@ void StelMovementMgr::updateVisionVector(double deltaTime)
 					v = move.targetObject->getEquinoxEquatorialPosAuto(core); //  ..Auto! Fix Bug LP:#1484976
 					break;
 				case MountGalactic:
-					v = move.targetObject->getGalacticPos(core);
+					v = move.targetObject->getGalacticPosAuto(core);
 					break;
 				case MountSupergalactic:
 					v = move.targetObject->getSupergalacticPos(core);
 					break;
 				case MountEquinoxEcliptical:
-					v = move.targetObject->getEclipticOfDatePos(core);
+					v = move.targetObject->getEclipticOfDatePosAuto(core);
 					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;
@@ -1298,13 +1298,13 @@ void StelMovementMgr::updateVisionVector(double deltaTime)
 					v = objectMgr->getSelectedObject()[0]->getEquinoxEquatorialPosAuto(core);
 					break;
 				case MountGalactic:
-					v = objectMgr->getSelectedObject()[0]->getGalacticPos(core);
+					v = objectMgr->getSelectedObject()[0]->getGalacticPosAuto(core);
 					break;
 				case MountSupergalactic:
 					v = objectMgr->getSelectedObject()[0]->getSupergalacticPos(core);
 					break;
 				case MountEquinoxEcliptical:
-					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePos(core);
+					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePosAuto(core);
 					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;
@@ -1754,13 +1754,13 @@ void StelMovementMgr::updateAutoZoom(double deltaTime)
 					v = objectMgr->getSelectedObject()[0]->getEquinoxEquatorialPosAuto(core);
 					break;
 				case MountGalactic:
-					v = objectMgr->getSelectedObject()[0]->getGalacticPos(core);
+					v = objectMgr->getSelectedObject()[0]->getGalacticPosAuto(core);
 					break;
 				case MountSupergalactic:
 					v = objectMgr->getSelectedObject()[0]->getSupergalacticPos(core);
 					break;
 				case MountEquinoxEcliptical:
-					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePos(core);
+					v = objectMgr->getSelectedObject()[0]->getEclipticOfDatePosAuto(core);
 					break;
 				default:
 					qWarning() << "StelMovementMgr: unexpected mountMode" << mountMode;

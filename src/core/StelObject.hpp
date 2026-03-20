@@ -426,12 +426,16 @@ public:
 
 	//! Get observer-centered galactic coordinates
 	Vec3d getGalacticPos(const StelCore* core) const;
+	//! Like getGalacticPos() but applies atmospheric refraction when atmosphere is active.
+	Vec3d getGalacticPosAuto(const StelCore* core) const;
 
 	//! Get observer-centered supergalactic coordinates
 	Vec3d getSupergalacticPos(const StelCore* core) const;
 
 	//! Get observer-centered ecliptic-of-date coordinates (ecliptic pole at +Z).
 	Vec3d getEclipticOfDatePos(const StelCore* core) const;
+	//! Like getEclipticOfDatePos() but applies atmospheric refraction when atmosphere is active.
+	Vec3d getEclipticOfDatePosAuto(const StelCore* core) const;
 
 	//! Get observer-centered hour angle + declination (at current equinox)
 	//! It is the geometric position, i.e. without taking refraction effect into account.

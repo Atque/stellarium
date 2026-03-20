@@ -95,6 +95,15 @@ Vec3d StelObject::getGalacticPos(const StelCore *core) const
 	return core->j2000ToGalactic(getJ2000EquatorialPos(core));
 }
 
+// Get observer-centered galactic position with refraction correction.
+// Refraction only exists in the AltAz frame, so we get apparent AltAz first
+// then rotate to galactic (same pattern as getSiderealPosApparent).
+Vec3d StelObject::getGalacticPosAuto(const StelCore *core) const
+{
+	return core->j2000ToGalactic(
+		core->altAzToJ2000(getAltAzPosAuto(core), StelCore::RefractionOff));
+}
+
 // Get observer-centered supergalactic position
 Vec3d StelObject::getSupergalacticPos(const StelCore *core) const
 {
@@ -105,6 +114,13 @@ Vec3d StelObject::getSupergalacticPos(const StelCore *core) const
 Vec3d StelObject::getEclipticOfDatePos(const StelCore *core) const
 {
 	return core->j2000ToEclipticOfDate(getJ2000EquatorialPos(core));
+}
+
+// Get observer-centered ecliptic-of-date position with refraction correction.
+Vec3d StelObject::getEclipticOfDatePosAuto(const StelCore *core) const
+{
+	return core->j2000ToEclipticOfDate(
+		core->altAzToJ2000(getAltAzPosAuto(core), StelCore::RefractionOff));
 }
 
 // Get parallactic angle, which is the deviation between zenith angle and north angle.

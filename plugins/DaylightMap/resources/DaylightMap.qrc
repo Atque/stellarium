@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/DaylightMap">
+    <file>earth.svg</file>
+  </qresource>
+</RCC>

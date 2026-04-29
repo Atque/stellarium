@@ -234,6 +234,10 @@ Q_IMPORT_PLUGIN(MosaicCameraStelPluginInterface)
 Q_IMPORT_PLUGIN(TimeNavigatorStelPluginInterface)
 #endif
 
+#ifdef USE_STATIC_PLUGIN_DAYLIGHTMAP
+Q_IMPORT_PLUGIN(DaylightMapStelPluginInterface)
+#endif
+
 // Initialize static variables
 StelApp* StelApp::singleton = nullptr;
 qint64 StelApp::startMSecs = 0;

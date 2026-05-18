@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QDebug>
 #include <QLocale>
+#include <QTimeZone>
 #include <QRegularExpression>
 #include <QProcess>
 #include <QSysInfo>
@@ -311,17 +312,15 @@ QString radToHmsNarration(const double angle, const bool decimal)
 	unsigned int h,m;
 	double s;
 	StelUtils::radToHms(angle, h, m, s);
-	int width, precision;
+	int precision;
 	QString carry;
 	if (decimal)
 	{
-		width=5;
 		precision=2;
 		carry="60.00";
 	}
 	else
 	{
-		width=4;
 		precision=1;
 		carry="60.0";
 	}
@@ -1650,9 +1649,9 @@ QString narrateDecimal(double num, int decimals)
 //! The method to splitting the text by substrings by some limit of string length
 QString wrapText(const QString& s, const int limit)
 {
-	static const uint32_t RLM32=U'\U0000200f'; // Right-Left-marker (starting Arab/Hebrew)
-	static const uint32_t LRM32=U'\U0000200e'; // Left-right-marker
-	static const uint32_t ZWS32=U'\U0000200b'; // Zero-width space
+	//static const uint32_t RLM32=U'\U0000200f'; // Right-Left-marker (starting Arab/Hebrew)
+	//static const uint32_t LRM32=U'\U0000200e'; // Left-right-marker
+	//static const uint32_t ZWS32=U'\U0000200b'; // Zero-width space
 	//static const QString LRM{"\u200e"}; // left-to-right mark: zero-width char
 	//static const QString RLM{"\u200f"}; // right-to-left mark: right to left zero-width non-Arabic char
 	static const QString ZWS{"\u200b"}; // zero-width space (we use them to combine cultural label groups)
@@ -2425,12 +2424,12 @@ double getDeltaTByIslamSadiqQureshi(const double jDay)
 	//year=qBound(1620, year, 2007);
 	if (year<1620)
 	{
-		const double j1620=qDateTimeToJd(QDateTime(QDate(1620, 1, 1), QTime(0, 0, 0), Qt::UTC));
+		const double j1620=qDateTimeToJd(QDateTime(QDate(1620, 1, 1), QTime(0, 0, 0), QTimeZone(0)));
 		ub=(j1620-2454101.0)/36525.0;
 	}
 	else if (year>2007)
 	{
-		const double j2008=qDateTimeToJd(QDateTime(QDate(2008, 1, 1), QTime(0, 0, 0), Qt::UTC));
+		const double j2008=qDateTimeToJd(QDateTime(QDate(2008, 1, 1), QTime(0, 0, 0), QTimeZone(0)));
 		ub=(j2008-2454101.0)/36525.0;
 	}
 	else

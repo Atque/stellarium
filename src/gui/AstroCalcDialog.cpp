@@ -280,7 +280,8 @@ void AstroCalcDialog::createDialogContent()
 	connect(dsoMgr, SIGNAL(flagSizeLimitsUsageChanged(bool)), this, SLOT(currentCelestialPositions()));
 	connect(dsoMgr, SIGNAL(minSizeLimitChanged(double)), this, SLOT(currentCelestialPositions()));
 	connect(dsoMgr, SIGNAL(maxSizeLimitChanged(double)), this, SLOT(currentCelestialPositions()));
-
+	connect(&StelApp::getInstance(), SIGNAL(flagShowDecimalDegreesChanged(bool)), this, SLOT(currentCelestialPositions()));
+	
 	ui->hecSelectedMinorPlanetsCheckBox->setChecked(conf->value("astrocalc/flag_hec_minor_planets", false).toBool());
 	connect(ui->hecSelectedMinorPlanetsCheckBox, SIGNAL(toggled(bool)), this, SLOT(saveHECFlagMinorPlanets(bool)));
 
@@ -9203,10 +9204,11 @@ QList<PlanetP> AstroCalcDialog::getSelectedMinorPlanets()
 
 void AstroCalcDialog::goToObject(const QString &name, const double JD)
 {
-	if (objectMgr->findAndSelectI18n(name, "Planet") || objectMgr->findAndSelect(name, "Planet"))
+	const QString objtype = "Planet";
+	if (objectMgr->findAndSelectI18n(name, objtype) || objectMgr->findAndSelect(name, objtype))
 	{
 		core->setJD(JD);
-		const QList<StelObjectP> newSelected = objectMgr->getSelectedObject();
+		const QList<StelObjectP> newSelected = objectMgr->getSelectedObject(objtype);
 		if (!newSelected.empty())
 		{
 			// Can't point to home planet

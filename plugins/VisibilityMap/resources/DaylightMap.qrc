@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/DaylightMap">
+    <file>earth_map.jpg</file>
+  </qresource>
+</RCC>

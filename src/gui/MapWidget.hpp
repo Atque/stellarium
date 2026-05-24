@@ -56,12 +56,27 @@ signals:
 
 protected:
 	void mousePressEvent(QMouseEvent* event) override;
+	void mouseMoveEvent(QMouseEvent* event) override;
+	void mouseReleaseEvent(QMouseEvent* event) override;
+	void wheelEvent(QWheelEvent* event) override;
 	void paintEvent(QPaintEvent* event) override;
 	void resizeEvent(QResizeEvent* event) override;
 
+	struct LonLat
+	{
+		double longitude;
+		double latitude;
+	};
+	LonLat mapPointToLonLat(const QPointF& mapPoint) const;
+	struct MapPoint
+	{
+		double x, y;
+	};
+	MapPoint lonLatToMapPoint(double lon, double lat) const;
+
 private:
 	void makeSearchAreaOutline(int width, int height);
-	void updateScaledMap();
+	void updateScaledMapAndRect();
 
 private:
 	double markerLat=0, markerLon=0;
@@ -70,6 +85,10 @@ private:
 	QPixmap map, scaledMap;
 	QPixmap locationMarker;
 	QRectF mapRect; // in device pixels
+	QPointF shift;
+	QPointF dragStart;
+	QPointF currentDragShift;
+	double zoom = 1;
 	bool markerVisible;
 };
 

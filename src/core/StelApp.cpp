@@ -224,6 +224,10 @@ Q_IMPORT_PLUGIN(VtsStelPluginInterface)
 Q_IMPORT_PLUGIN(OnlineQueriesPluginInterface)
 #endif
 
+#ifdef USE_STATIC_PLUGIN_PLANES
+Q_IMPORT_PLUGIN(PlanesStelPluginInterface)
+#endif
+
 #ifdef USE_STATIC_PLUGIN_NEBULATEXTURES
 Q_IMPORT_PLUGIN(NebulaTexturesStelPluginInterface)
 #endif
@@ -1578,6 +1582,13 @@ float StelApp::getScreenScale() const
 {
 	const float dppRatio = StelApp::getInstance().getDevicePixelsPerPixel();
 	const float fontRatio = StelApp::getInstance().screenFontSizeRatio();
+	return dppRatio * fontRatio;
+}
+
+float StelApp::getGuiScale() const
+{
+	const float dppRatio = StelApp::getInstance().getDevicePixelsPerPixel();
+	const float fontRatio = StelApp::getInstance().guiFontSizeRatio();
 	return dppRatio * fontRatio;
 }
 

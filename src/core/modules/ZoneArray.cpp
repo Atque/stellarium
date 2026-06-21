@@ -26,6 +26,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QDir>
+#include <type_traits>
 #ifdef Q_OS_WIN
 #include <io.h>
 #include <Windows.h>
@@ -644,6 +645,100 @@ void SpecialZoneArray<Star>::searchWithin(const StelCore* core, int index, const
 			result.push_back(s->createStelObject(this,z));
 		}
 	}
+}
+
+template<class Star>
+void SpecialZoneArray<Star>::collectStarKinematics(const StelCore* core, int index, const SphericalRegionP region, const double withParallax, const Vec3d diffPos,
+																   const StarKinematicsQuery& query, QVector<StarKinematics>& result) const
+{
+	const float maxMilliMag = 1000.f*query.magnitudeLimit;
+	const SpecialZoneData<Star> *const z = getZones()+index;
+	if (!query.useMagnitudeLimit && !query.useProperMotionLimit)
+		return;
+	if (std::is_same<Star, Star3>::value)
+		return;
+	// Only Star1 stores radial velocities. Avoid touching the much larger Star2 catalog when RV is required.
+	if (query.requireRadialVelocity && !std::is_same<Star, Star1>::value)
+		return;
+
+	const bool stableCatalogPM = !std::is_same<Star, Star1>::value;
+	if (query.useProperMotionLimit && stableCatalogPM && maxProperMotionByZone.isEmpty())
+		maxProperMotionByZone.fill(-1.f, static_cast<int>(nr_of_zones));
+	const bool maximumKnown = stableCatalogPM && maxProperMotionByZone.at(index) >= 0.f;
+	const bool zoneCanPassProperMotion = !query.useProperMotionLimit || !maximumKnown || maxProperMotionByZone.at(index) >= query.properMotionLimit;
+	if (!zoneCanPassProperMotion)
+	{
+		if (!query.useMagnitudeLimit || maxMilliMag < mag_min)
+			return;
+	}
+	if (!query.useProperMotionLimit && maxMilliMag < mag_min)
+		return;
+
+	const float dyrs = static_cast<float>(core->getJDE()-STAR_CATALOG_JDEPOCH)/365.25f;
+	const bool withAberration = core->getUseAberration();
+	Vec3d vel(0.);
+	if (withAberration)
+		vel = core->getAberrationVec(core->getJDE());
+
+	Vec3d pos;
+	double RA, DEC, pmra, pmdec, Plx, RadialVel;
+	float observedMaximum = 0.f;
+	for (const Star* s=z->getStars(); s<z->getStars()+z->size; ++s)
+	{
+		double catalogPM = 0.;
+		if (query.useProperMotionLimit && stableCatalogPM)
+		{
+			catalogPM = s->getPMTotal();
+			if (!maximumKnown)
+				observedMaximum = qMax(observedMaximum, static_cast<float>(catalogPM));
+		}
+
+		if (query.requireRadialVelocity && s->getRV() == 0.)
+			continue;
+
+		const bool passesMagnitude = query.useMagnitudeLimit && s->getMag() < maxMilliMag;
+		if (!passesMagnitude)
+		{
+			if (!query.useProperMotionLimit || !zoneCanPassProperMotion)
+				continue;
+			if (stableCatalogPM && catalogPM < query.properMotionLimit)
+				continue;
+		}
+
+		s->getFull6DSolution(RA, DEC, Plx, pmra, pmdec, RadialVel, dyrs);
+		const double pmTotal = std::sqrt(pmra*pmra + pmdec*pmdec);
+		if (pmTotal <= 0.)
+			continue;
+		const bool passesProperMotion = query.useProperMotionLimit && pmTotal >= query.properMotionLimit;
+		if (!passesMagnitude && !passesProperMotion)
+			continue;
+
+		StelUtils::spheToRect(RA, DEC, pos);
+		s->getBinaryOrbit(core->getJDE(), pos);
+		s->getPlxEffect(withParallax * Plx, pos, diffPos);
+		pos.normalize();
+		if (withAberration)
+		{
+			pos += vel;
+			pos.normalize();
+		}
+
+		if (!region->contains(pos))
+			continue;
+
+		StarKinematics kinematics;
+		kinematics.position = pos;
+		const Vec3d east(-std::sin(RA), std::cos(RA), 0.0);
+		const Vec3d north(-std::sin(DEC)*std::cos(RA), -std::sin(DEC)*std::sin(RA), std::cos(DEC));
+		kinematics.properMotion = east*pmra + north*pmdec;
+		kinematics.totalProperMotion = pmTotal;
+		kinematics.radialVelocity = RadialVel;
+		kinematics.hasRadialVelocity = s->getRV() != 0.;
+		result.push_back(kinematics);
+	}
+
+	if (query.useProperMotionLimit && stableCatalogPM && !maximumKnown)
+		maxProperMotionByZone[index] = observedMaximum;
 }
 
 

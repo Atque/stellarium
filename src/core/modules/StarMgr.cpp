@@ -1612,6 +1612,39 @@ QList<StelObjectP > StarMgr::searchWithin(const SphericalRegionP region, const S
 	return result;
 }
 
+QVector<StarKinematics> StarMgr::collectStarKinematics(const SphericalRegionP region, const StelCore* core, const StarKinematicsQuery& query) const
+{
+	QVector<StarKinematics> result;
+	if (!getFlagStars() || (!query.useMagnitudeLimit && !query.useProperMotionLimit))
+		return result;
+
+	QVector<SphericalCap> caps=region->getBoundingSphericalCaps();
+	QVector<SphericalCap> largerCaps;
+	for (const auto &cap : std::as_const(caps))
+		largerCaps.append(SphericalCap(cap.n, qMin(cap.d, 0.75)));
+
+	const GeodesicSearchResult* geodesic_search_result = core->getGeodesicGrid(maxGeodesicGridLevel)->search(largerCaps, maxGeodesicGridLevel);
+
+	double withParallax = core->getUseParallax() * core->getParallaxFactor();
+	Vec3d diffPos(0., 0., 0.);
+	if (withParallax)
+		diffPos = core->getParallaxDiff(core->getJDE());
+
+	for (const auto* z : std::as_const(gridLevels))
+	{
+		int zone;
+		for (GeodesicSearchInsideIterator it1(*geodesic_search_result, z->level); (zone = it1.next()) >= 0;)
+			z->collectStarKinematics(core, zone, region, withParallax, diffPos, query, result);
+
+		for (GeodesicSearchBorderIterator it1(*geodesic_search_result, z->level); (zone = it1.next()) >= 0;)
+			z->collectStarKinematics(core, zone, region, withParallax, diffPos, query, result);
+
+		z->collectStarKinematics(core, (20<<(z->level<<1)), region, withParallax, diffPos, query, result);
+	}
+
+	return result;
+}
+
 
 
 //! Update i18 names from english names according to passed translator.
@@ -2679,7 +2712,5 @@ QStringList StarMgr::getCultureLabels(StarId hip, StelObject::CulturalDisplaySty
 	labels.removeDuplicates();
 	labels.removeAll(QString(""));
 	labels.removeAll(QString());
-	return labels;
-}
-
-
+		return labels;
+	}

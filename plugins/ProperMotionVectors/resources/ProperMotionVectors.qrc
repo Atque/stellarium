@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/ProperMotionVectors">
+    <file>bt_ProperMotionVectors_On.xpm</file>
+    <file>bt_ProperMotionVectors_Off.xpm</file>
+  </qresource>
+</RCC>

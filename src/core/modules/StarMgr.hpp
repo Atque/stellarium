@@ -73,6 +73,27 @@ typedef struct
 typedef QPair<StelObjectP, float> StelACStarData;
 typedef uint64_t StarId;
 
+//! Date-dependent kinematic data for a star catalog entry.
+struct StarKinematics
+{
+	Vec3d position;             //!< Current apparent J2000 position.
+	Vec3d properMotion;         //!< Tangent-space proper motion vector, in mas/yr.
+	double totalProperMotion;   //!< Total angular proper motion, in mas/yr.
+	double radialVelocity;      //!< Current radial velocity, in km/s.
+	bool hasRadialVelocity;
+};
+
+//! Selection criteria for collecting stellar kinematics from a sky region.
+//! When both limits are enabled, entries matching either limit are returned.
+struct StarKinematicsQuery
+{
+	float magnitudeLimit = 25.f;    //!< Visual magnitude limit.
+	float properMotionLimit = 0.f; //!< Total angular proper motion in mas/yr.
+	bool useMagnitudeLimit = true;
+	bool useProperMotionLimit = false;
+	bool requireRadialVelocity = false;
+};
+
 typedef struct
 {
 	StarId hip;
@@ -195,6 +216,9 @@ public:
 	//! @param maxMag only return results brighter than that (default 25).
 	//! @note May become large!
 	QList<StelObjectP > searchWithin(const SphericalRegionP region, const StelCore* core, const bool hipOnly=true, const float maxMag=25.f) const;
+	//! Collect current-date stellar kinematics without constructing StelObject wrappers.
+	//! Entries are selected when they match either enabled limit.
+	QVector<StarKinematics> collectStarKinematics(const SphericalRegionP region, const StelCore* core, const StarKinematicsQuery& query) const;
 
 	//! Return the matching Stars object's pointer if exists or Q_NULLPTR
 	//! @param nameI18n The case in-sensitive localized star common name or HIP/HP, SAO, HD, HR, GCVS or WDS number

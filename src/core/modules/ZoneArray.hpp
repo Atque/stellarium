@@ -99,6 +99,8 @@ public:
 							  double cosLimFov, QList<StelObjectP > &result) = 0;
 	virtual void searchWithin(const StelCore* core, int index, const SphericalRegionP region, const double withParallax, const Vec3d diffPos, const bool hipOnly, const float maxMag,
 							  QList<StelObjectP > &result) const = 0;
+	virtual void collectStarKinematics(const StelCore* core, int index, const SphericalRegionP region, const double withParallax, const Vec3d diffPos,
+									   const StarKinematicsQuery& query, QVector<StarKinematics>& result) const = 0;
 
     virtual StelObjectP searchGaiaID(int index, const StarId source_id, int& matched) const = 0;
 	virtual void searchGaiaIDepochPos(const StarId source_id, float dyrs,
@@ -192,7 +194,9 @@ protected:
 	void searchAround(const StelCore* core, int index, const Vec3d &v, const double withParallax, 
 					  const Vec3d diffPos, double cosLimFov, QList<StelObjectP > &result) override;
 	void searchWithin(const StelCore* core, int index, const SphericalRegionP region, const double withParallax, const Vec3d diffPos, const bool hipOnly, const float maxMag,
-			  QList<StelObjectP > &result) const override;
+					  QList<StelObjectP > &result) const override;
+	void collectStarKinematics(const StelCore* core, int index, const SphericalRegionP region, const double withParallax, const Vec3d diffPos,
+								   const StarKinematicsQuery& query, QVector<StarKinematics>& result) const override;
 	StelObjectP searchGaiaID(int index, const StarId source_id, int& matched) const override;
  	void searchGaiaIDepochPos(const StarId source_id, float dyrs,
                                                   double & RA,
@@ -205,6 +209,8 @@ protected:
 	Star *stars;
 private:
 	uchar *mmap_start;
+	//! Lazily allocated per-zone PM maxima for catalogs with time-invariant proper motion.
+	mutable QVector<float> maxProperMotionByZone;
 };
 
 //! @class HipZoneArray

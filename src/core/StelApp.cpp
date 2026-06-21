@@ -196,6 +196,10 @@ Q_IMPORT_PLUGIN(EquationOfTimeStelPluginInterface)
 Q_IMPORT_PLUGIN(PointerCoordinatesStelPluginInterface)
 #endif
 
+#ifdef USE_STATIC_PLUGIN_PROPERMOTIONVECTORS
+Q_IMPORT_PLUGIN(ProperMotionVectorsStelPluginInterface)
+#endif
+
 #ifdef USE_STATIC_PLUGIN_OBSERVABILITY
 Q_IMPORT_PLUGIN(ObservabilityStelPluginInterface)
 #endif

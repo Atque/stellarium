@@ -1722,12 +1722,25 @@ void StelPainter::drawStelVertexArray(const StelVertexArray& arr, bool checkDisc
 	enableClientStates(false);
 }
 
-void StelPainter::drawSphericalTriangles(const StelVertexArray& va, bool textured, bool colored, const SphericalCap* clippingCap, bool doSubDivide, double maxSqDistortion)
+void StelPainter::drawSphericalTriangles(const StelVertexArray& va, bool textured, bool colored, const SphericalCap* clippingCap, bool doSubDivide, double maxSqDistortion, const Vec3d& observerVelocity)
 {
 	if (va.vertex.isEmpty())
 		return;
 
 	Q_ASSERT(va.vertex.size()>2);
+	StelVertexArray aberredVa;
+	const StelVertexArray* source = &va;
+	if (observerVelocity!=Vec3d(0.))
+	{
+		aberredVa = va;
+		for (Vec3d& vertex : aberredVa.vertex)
+		{
+			vertex += observerVelocity;
+			vertex.normalize();
+		}
+		source = &aberredVa;
+	}
+
 	polygonVertexArray.clear();
 	polygonTextureCoordArray.clear();
 
@@ -1736,14 +1749,14 @@ void StelPainter::drawSphericalTriangles(const StelVertexArray& va, bool texture
 	if (!doSubDivide)
 	{
 		// The simplest case, we don't need to iterate through the triangles at all.
-		drawStelVertexArray(va);
+		drawStelVertexArray(*source);
 		return;
 	}
 
 	// the last case.  It is the slowest, it process the triangles one by one.
 	{
 		// Project all the triangles of the VertexArray into our buffer arrays.
-		VertexArrayProjector result = va.foreachTriangle(VertexArrayProjector(va, this, clippingCap, &polygonVertexArray, textured ? &polygonTextureCoordArray : Q_NULLPTR, colored ? &polygonColorArray : Q_NULLPTR, maxSqDistortion));
+		VertexArrayProjector result = source->foreachTriangle(VertexArrayProjector(*source, this, clippingCap, &polygonVertexArray, textured ? &polygonTextureCoordArray : Q_NULLPTR, colored ? &polygonColorArray : Q_NULLPTR, maxSqDistortion));
 		result.drawResult();
 		return;
 	}

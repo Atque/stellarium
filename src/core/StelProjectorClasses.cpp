@@ -783,6 +783,353 @@ QString StelProjectorCylinderFill::getDescriptionI18() const
 		  "The view is stretched to always show a 360x180° field of view in a fixed view direction. It is provided for specialized setups.");
 }
 
+namespace
+{
+enum CubeMapFace
+{
+	CubeMapFaceFront,
+	CubeMapFaceLeft,
+	CubeMapFaceRight,
+	CubeMapFaceBack,
+	CubeMapFaceTop,
+	CubeMapFaceBottom,
+	CubeMapFaceNone
+};
+
+CubeMapFace cubeMapFaceForVector(const Vec3d& v)
+{
+	const double ax = std::abs(v[0]);
+	const double ay = std::abs(v[1]);
+	const double az = std::abs(v[2]);
+
+	if (az>=ax && az>=ay)
+		return v[2]<=0. ? CubeMapFaceFront : CubeMapFaceBack;
+	if (ax>=ay)
+		return v[0]<0. ? CubeMapFaceLeft : CubeMapFaceRight;
+	return v[1]<0. ? CubeMapFaceBottom : CubeMapFaceTop;
+}
+
+CubeMapFace cubeMapFaceForVector(const Vec3f& v)
+{
+	return cubeMapFaceForVector(Vec3d(v[0], v[1], v[2]));
+}
+
+bool cubeMapFacesShareNetEdge(CubeMapFace face1, CubeMapFace face2)
+{
+	if (face1==face2)
+		return true;
+
+	return (face1==CubeMapFaceFront && face2==CubeMapFaceLeft) ||
+	       (face1==CubeMapFaceLeft && face2==CubeMapFaceFront) ||
+	       (face1==CubeMapFaceFront && face2==CubeMapFaceRight) ||
+	       (face1==CubeMapFaceRight && face2==CubeMapFaceFront) ||
+	       (face1==CubeMapFaceRight && face2==CubeMapFaceBack) ||
+	       (face1==CubeMapFaceBack && face2==CubeMapFaceRight) ||
+	       (face1==CubeMapFaceFront && face2==CubeMapFaceTop) ||
+	       (face1==CubeMapFaceTop && face2==CubeMapFaceFront) ||
+	       (face1==CubeMapFaceFront && face2==CubeMapFaceBottom) ||
+	       (face1==CubeMapFaceBottom && face2==CubeMapFaceFront);
+}
+
+bool cubeMapLocalCoords(CubeMapFace face, const Vec3d& v, double& u, double& w)
+{
+	double denom = 0.;
+	switch (face)
+	{
+		case CubeMapFaceFront:
+			denom = -v[2];
+			u = v[0]/denom;
+			w = v[1]/denom;
+			return denom>0.;
+		case CubeMapFaceLeft:
+			denom = -v[0];
+			u = -v[2]/denom;
+			w = v[1]/denom;
+			return denom>0.;
+		case CubeMapFaceRight:
+			denom = v[0];
+			u = v[2]/denom;
+			w = v[1]/denom;
+			return denom>0.;
+		case CubeMapFaceBack:
+			denom = v[2];
+			u = -v[0]/denom;
+			w = v[1]/denom;
+			return denom>0.;
+		case CubeMapFaceTop:
+			denom = v[1];
+			u = v[0]/denom;
+			w = v[2]/denom;
+			return denom>0.;
+		case CubeMapFaceBottom:
+			denom = -v[1];
+			u = v[0]/denom;
+			w = -v[2]/denom;
+			return denom>0.;
+		case CubeMapFaceNone:
+			break;
+	}
+	return false;
+}
+
+void cubeMapFaceOffset(CubeMapFace face, double& x, double& y)
+{
+	switch (face)
+	{
+		case CubeMapFaceLeft:
+			x = -3.; y = 0.;
+			break;
+		case CubeMapFaceFront:
+			x = -1.; y = 0.;
+			break;
+		case CubeMapFaceRight:
+			x = 1.; y = 0.;
+			break;
+		case CubeMapFaceBack:
+			x = 3.; y = 0.;
+			break;
+		case CubeMapFaceTop:
+			x = -1.; y = 2.;
+			break;
+		case CubeMapFaceBottom:
+			x = -1.; y = -2.;
+			break;
+		case CubeMapFaceNone:
+			x = 0.; y = 0.;
+			break;
+	}
+}
+
+bool cubeMapInSquare(double x, double y, double cx, double cy)
+{
+	return x>=cx-1. && x<=cx+1. && y>=cy-1. && y<=cy+1.;
+}
+
+CubeMapFace cubeMapFaceForProjection(double x, double y, double& u, double& w)
+{
+	if (cubeMapInSquare(x, y, -1., 0.))
+	{
+		u = x+1.;
+		w = y;
+		return CubeMapFaceFront;
+	}
+	if (cubeMapInSquare(x, y, -3., 0.))
+	{
+		u = x+3.;
+		w = y;
+		return CubeMapFaceLeft;
+	}
+	if (cubeMapInSquare(x, y, 1., 0.))
+	{
+		u = x-1.;
+		w = y;
+		return CubeMapFaceRight;
+	}
+	if (cubeMapInSquare(x, y, 3., 0.))
+	{
+		u = x-3.;
+		w = y;
+		return CubeMapFaceBack;
+	}
+	if (cubeMapInSquare(x, y, -1., 2.))
+	{
+		u = x+1.;
+		w = y-2.;
+		return CubeMapFaceTop;
+	}
+	if (cubeMapInSquare(x, y, -1., -2.))
+	{
+		u = x+1.;
+		w = y+2.;
+		return CubeMapFaceBottom;
+	}
+	return CubeMapFaceNone;
+}
+}
+
+QString StelProjectorCubeMap::getNameI18() const
+{
+	return q_("Cube map");
+}
+
+QString StelProjectorCubeMap::getDescriptionI18() const
+{
+	return q_("Cube map projection renders the full sky as six gnomonic 90x90 degree faces in a standard cross layout.");
+}
+
+bool StelProjectorCubeMap::forward(Vec3f &v) const
+{
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	if (r<=0.f)
+		return false;
+
+	const CubeMapFace face = cubeMapFaceForVector(v);
+	double u = 0.;
+	double w = 0.;
+	if (!cubeMapLocalCoords(face, Vec3d(v[0], v[1], v[2]), u, w))
+		return false;
+
+	double ox = 0.;
+	double oy = 0.;
+	cubeMapFaceOffset(face, ox, oy);
+	v[0] = static_cast<float>(ox+u);
+	v[1] = static_cast<float>(oy+w);
+	v[2] = r;
+	return true;
+}
+
+bool StelProjectorCubeMap::backward(Vec3d &v) const
+{
+	double u = 0.;
+	double w = 0.;
+	const CubeMapFace face = cubeMapFaceForProjection(v[0], v[1], u, w);
+	switch (face)
+	{
+		case CubeMapFaceFront:
+			v.set(u, w, -1.);
+			break;
+		case CubeMapFaceLeft:
+			v.set(-1., w, -u);
+			break;
+		case CubeMapFaceRight:
+			v.set(1., w, u);
+			break;
+		case CubeMapFaceBack:
+			v.set(-u, w, 1.);
+			break;
+		case CubeMapFaceTop:
+			v.set(u, 1., w);
+			break;
+		case CubeMapFaceBottom:
+			v.set(u, -1., -w);
+			break;
+		case CubeMapFaceNone:
+			v.set(0., 0., -1.);
+			return false;
+	}
+	v.normalize();
+	return true;
+}
+
+float StelProjectorCubeMap::fovToViewScalingFactor(float fov) const
+{
+	constexpr float fullCubeMapHalfFov = 0.75f*M_PIf;
+	return 4.f*fov/fullCubeMapHalfFov;
+}
+
+float StelProjectorCubeMap::viewScalingFactorToFov(float vsf) const
+{
+	constexpr float fullCubeMapHalfFov = 0.75f*M_PIf;
+	return vsf*fullCubeMapHalfFov/4.f;
+}
+
+bool StelProjectorCubeMap::intersectViewportDiscontinuityInternal(const Vec3d& p1, const Vec3d& p2) const
+{
+	return !cubeMapFacesShareNetEdge(cubeMapFaceForVector(p1), cubeMapFaceForVector(p2));
+}
+
+bool StelProjectorCubeMap::intersectViewportDiscontinuityInternal(const Vec3d& capN, double capD) const
+{
+	if (capD<=0.)
+		return true;
+
+	const double sinRadius = std::sqrt(qMax(0., 1.-capD*capD));
+	constexpr double oneOverSqrt2 = 0.70710678118654752440;
+	static const Vec3d seamNormals[] =
+	{
+		Vec3d(oneOverSqrt2,  oneOverSqrt2, 0.),
+		Vec3d(oneOverSqrt2, -oneOverSqrt2, 0.),
+		Vec3d(oneOverSqrt2, 0.,  oneOverSqrt2),
+		Vec3d(oneOverSqrt2, 0., -oneOverSqrt2),
+		Vec3d(0., oneOverSqrt2,  oneOverSqrt2),
+		Vec3d(0., oneOverSqrt2, -oneOverSqrt2)
+	};
+
+	for (const Vec3d& seamNormal : seamNormals)
+	{
+		if (std::abs(capN*seamNormal)<=sinRadius)
+			return true;
+	}
+	return false;
+}
+
+QByteArray StelProjectorCubeMap::getForwardTransformShader() const
+{
+	return modelViewTransform->getForwardTransformShader() + R"(
+#line 1 104
+highp vec3 projectorForwardTransform(highp vec3 v)
+{
+	highp float r = length(v);
+	highp vec3 av = abs(v);
+	highp vec2 p;
+
+	if (av.z>=av.x && av.z>=av.y)
+	{
+		if (v.z<=0.0)
+			p = vec2(-1.0 + v.x/(-v.z), v.y/(-v.z));
+		else
+			p = vec2(3.0 - v.x/v.z, v.y/v.z);
+	}
+	else if (av.x>=av.y)
+	{
+		if (v.x<0.0)
+			p = vec2(-3.0 - v.z/(-v.x), v.y/(-v.x));
+		else
+			p = vec2(1.0 + v.z/v.x, v.y/v.x);
+	}
+	else
+	{
+		if (v.y<0.0)
+			p = vec2(-1.0 + v.x/(-v.y), -2.0 - v.z/(-v.y));
+		else
+			p = vec2(-1.0 + v.x/v.y, 2.0 + v.z/v.y);
+	}
+
+	return vec3(p, r);
+}
+#line 1 0
+)";
+}
+
+QByteArray StelProjectorCubeMap::getBackwardTransformShader() const
+{
+	return modelViewTransform->getBackwardTransformShader() + R"(
+#line 1 105
+bool cubeMapInSquare(highp vec2 p, highp vec2 c)
+{
+	return p.x>=c.x-1.0 && p.x<=c.x+1.0 && p.y>=c.y-1.0 && p.y<=c.y+1.0;
+}
+
+highp vec3 projectorBackwardTransform(highp vec3 v, out bool ok)
+{
+	highp vec2 p = v.xy;
+	highp vec3 d;
+
+	ok = true;
+	if (cubeMapInSquare(p, vec2(-1.0, 0.0)))
+		d = vec3(p.x+1.0, p.y, -1.0);
+	else if (cubeMapInSquare(p, vec2(-3.0, 0.0)))
+		d = vec3(-1.0, p.y, -(p.x+3.0));
+	else if (cubeMapInSquare(p, vec2(1.0, 0.0)))
+		d = vec3(1.0, p.y, p.x-1.0);
+	else if (cubeMapInSquare(p, vec2(3.0, 0.0)))
+		d = vec3(-(p.x-3.0), p.y, 1.0);
+	else if (cubeMapInSquare(p, vec2(-1.0, 2.0)))
+		d = vec3(p.x+1.0, 1.0, p.y-2.0);
+	else if (cubeMapInSquare(p, vec2(-1.0, -2.0)))
+		d = vec3(p.x+1.0, -1.0, -(p.y+2.0));
+	else
+	{
+		ok = false;
+		d = vec3(0.0, 0.0, -1.0);
+	}
+
+	return normalize(d);
+}
+#line 1 0
+)";
+}
+
 QString StelProjectorMercator::getNameI18() const
 {
 	return q_("Mercator");

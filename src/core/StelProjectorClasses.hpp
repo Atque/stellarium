@@ -184,6 +184,26 @@ public:
 	float getMaxFov() const override {return 180.f;} // vertical fov always max 180.
 };
 
+class StelProjectorCubeMap : public StelProjector
+{
+public:
+	StelProjectorCubeMap(ModelViewTranformP func) : StelProjector(func) {}
+	QString getNameI18() const override;
+	QString getDescriptionI18() const override;
+	float getMaxFov() const override {return 270.f;}
+	bool forward(Vec3f &v) const override;
+	bool backward(Vec3d &v) const override;
+	float fovToViewScalingFactor(float fov) const override;
+	float viewScalingFactorToFov(float vsf) const override;
+	QByteArray getForwardTransformShader() const override;
+	QByteArray getBackwardTransformShader() const override;
+protected:
+	bool hasDiscontinuity() const override {return true;}
+	bool intersectViewportDiscontinuityInternal(const Vec3d& p1, const Vec3d& p2) const override;
+	bool intersectViewportDiscontinuityInternal(const Vec3d& capN, double capD) const override;
+	void computeBoundingCap() override {boundingCap = SphericalCap(Vec3d(1,0,0), -1.);}
+};
+
 class StelProjectorMercator : public StelProjector
 {
 public:

@@ -467,6 +467,8 @@ public slots:
 	{
 		if (core->getCurrentProjectionType()==StelCore::ProjectionCylinderFill)
 			currentFov=180.0;
+		else if (core->getCurrentProjectionType()==StelCore::ProjectionCubeMap)
+			currentFov=270.0;
 		else
 			currentFov=qBound(minFov, f, maxFov);
 
@@ -638,4 +640,3 @@ private:
 };
 
 #endif // STELMOVEMENTMGR_HPP
-

@@ -461,7 +461,7 @@ void Constellation::drawArtOptim(StelPainter& sPainter, const SphericalRegion& r
 			if (artTexture->bind()==false)
 				return;
 
-			sPainter.drawStelVertexArray(artPolygon, false, obsVelocity);
+			sPainter.drawSphericalTriangles(artPolygon, true, false, Q_NULLPTR, true, 5., obsVelocity);
 		}
 	}
 }

@@ -1663,8 +1663,10 @@ void StelMovementMgr::dragView(int x1, int y1, int x2, int y2)
 		core->setTimeRate(0);
 		Vec3d v1, v2;
 		const StelProjectorP prj = core->getProjection(StelCore::FrameEquinoxEqu);
-		prj->unProject(x2,y2, v2);
-		prj->unProject(x1,y1, v1);
+		const bool ok2 = prj->unProject(x2,y2, v2);
+		const bool ok1 = prj->unProject(x1,y1, v1);
+		if (core->getCurrentProjectionType()==StelCore::ProjectionCubeMap && (!ok1 || !ok2))
+			return;
 		v1[2]=0; v1.normalize();
 		v2[2]=0; v2.normalize();
 		double angle = (v2^v1)[2];
@@ -1676,8 +1678,10 @@ void StelMovementMgr::dragView(int x1, int y1, int x2, int y2)
 	{
 		Vec3d tempvec1, tempvec2;
 		const StelProjectorP prj = core->getProjection(StelCore::FrameJ2000);
-		prj->unProject(x2,y2, tempvec2);
-		prj->unProject(x1,y1, tempvec1);
+		const bool ok2 = prj->unProject(x2,y2, tempvec2);
+		const bool ok1 = prj->unProject(x1,y1, tempvec1);
+		if (core->getCurrentProjectionType()==StelCore::ProjectionCubeMap && (!ok1 || !ok2))
+			return;
 		double az1, alt1, az2, alt2;
 		StelUtils::rectToSphe(&az1, &alt1, j2000ToMountFrame(tempvec1));
 		StelUtils::rectToSphe(&az2, &alt2, j2000ToMountFrame(tempvec2));
@@ -1755,6 +1759,8 @@ void StelMovementMgr::updateAutoZoom(double deltaTime)
 // Zoom to the given field of view
 void StelMovementMgr::zoomTo(double aim_fov, float zoomDuration)
 {
+	if (core->getCurrentProjectionType()==StelCore::ProjectionCubeMap)
+		aim_fov = 270.;
 	zoomDuration /= movementsSpeedFactor;
 	zoomMove.setTarget(currentFov, aim_fov, zoomDuration);
 	flagAutoZoom = true;

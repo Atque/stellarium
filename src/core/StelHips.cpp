@@ -837,6 +837,30 @@ void HipsSurvey::drawTile(int order, int pix, int drawOrder, int splitOrder, boo
 	nb = fillArrays(order, pix, drawOrder, splitOrder, outside, sPainter, observerVelocity,
 	                texCoordShift, texCoordScale, vertsArray, texArray, colorArray, indicesArray,
 	                withAtmosphericExtinction, extinctionColor);
+	if (StelApp::getInstance().getCore()->getCurrentProjectionType()==StelCore::ProjectionCubeMap)
+	{
+		const StelProjectorP proj = sPainter->getProjector();
+		QVector<uint16_t> filteredIndices;
+		filteredIndices.reserve(indicesArray.size());
+		for (int i=0; i+2<indicesArray.size(); i+=3)
+		{
+			const uint16_t i0 = indicesArray.at(i);
+			const uint16_t i1 = indicesArray.at(i+1);
+			const uint16_t i2 = indicesArray.at(i+2);
+			if (proj->intersectViewportDiscontinuity(vertsArray.at(i0), vertsArray.at(i1)) ||
+			    proj->intersectViewportDiscontinuity(vertsArray.at(i1), vertsArray.at(i2)) ||
+			    proj->intersectViewportDiscontinuity(vertsArray.at(i2), vertsArray.at(i0)))
+			{
+				continue;
+			}
+			filteredIndices << i0 << i1 << i2;
+		}
+		if (filteredIndices.size()!=indicesArray.size())
+		{
+			indicesArray = filteredIndices;
+			nb = indicesArray.size();
+		}
+	}
 	if (!callback) {
 		if (withAtmosphericExtinction)
 			sPainter->setArrays(vertsArray.constData(), texArray.constData(), colorArray.constData());

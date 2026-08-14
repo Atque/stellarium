@@ -448,6 +448,9 @@ StelProjectorP StelCore::getProjection(StelProjector::ModelViewTranformP modelVi
 		case ProjectionCylinder:
 			prj = StelProjectorP(new StelProjectorCylinder(modelViewTransform));
 			break;
+		case ProjectionCubeMap:
+			prj = StelProjectorP(new StelProjectorCubeMap(modelViewTransform));
+			break;
 		case ProjectionCylinderFill:
 			prj = StelProjectorP(new StelProjectorCylinderFill(modelViewTransform));
 			break;
@@ -528,6 +531,10 @@ void StelCore::windowHasBeenResized(qreal x, qreal y, qreal width, qreal height)
 	{
 		currentProjectorParams.widthStretch=0.5*width/height;
 		currentProjectorParams.viewportFovDiameter = height;
+	}
+	else if (currentProjectionType==ProjectionType::ProjectionCubeMap)
+	{
+		currentProjectorParams.viewportFovDiameter = qMin(width, height*4./3.);
 	}
 }
 
@@ -629,10 +636,20 @@ void StelCore::setCurrentProjectionType(ProjectionType type)
 			movementMgr->setViewportVerticalOffsetTarget(0.);
 			movementMgr->zoomTo(180., 0.5);
 		}
+		else if (currentProjectionType==ProjectionType::ProjectionCubeMap)
+		{
+			conf->setValue("projection/width_stretch", currentProjectorParams.widthStretch);
+			currentProjectorParams.fov=270.f;
+			currentProjectorParams.widthStretch=1.0;
+			currentProjectorParams.viewportFovDiameter = qMin(static_cast<qreal>(currentProjectorParams.viewportXywh[2]), static_cast<qreal>(currentProjectorParams.viewportXywh[3])*4./3.);
+			Q_ASSERT(movementMgr);
+			movementMgr->zoomTo(270., 0.5);
+		}
 		else
 		{
 			// reset to what is stored in config.ini
 			currentProjectorParams.widthStretch=conf->value("projection/width_stretch", 1.0).toDouble();
+			currentProjectorParams.viewportFovDiameter = qMin(currentProjectorParams.viewportXywh[2], currentProjectorParams.viewportXywh[3]);
 		}
 
 		emit currentProjectionTypeChanged(type);

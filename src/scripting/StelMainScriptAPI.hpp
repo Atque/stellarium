@@ -627,6 +627,7 @@ public slots:
 	//! - ProjectionHammer
 	//! - ProjectionMollweide
 	//! - ProjectionCylinder
+	//! - ProjectionCubeMap
 	//! - ProjectionMercator
 	//! - ProjectionOrthographic
 	//! - ProjectionSinusoidal
@@ -1124,4 +1125,3 @@ private:
 };
 
 #endif // STELMAINSCRIPTAPI_HPP
-

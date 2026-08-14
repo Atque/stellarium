@@ -34,6 +34,8 @@
 #include "StelModuleMgr.hpp"
 #include "LandscapeMgr.hpp"
 #include "Landscape.hpp"
+#include "SolarSystem.hpp"
+#include "Planet.hpp"
 
 #include <QOpenGLContext>
 #include <QOpenGLVertexArrayObject>
@@ -43,10 +45,74 @@
 #include <QSettings>
 #include <QDebug>
 #include <QtGlobal>
+#include <algorithm>
+#include <cmath>
 
 // The 0.025 corresponds to the maximum eye resolution in degree
 #define EYE_RESOLUTION (0.25f)
 #define MAX_LINEAR_RADIUS 8.f
+
+namespace
+{
+float smoothStep(const float edge0, const float edge1, const float x)
+{
+	const float t = qBound(0.f, (x-edge0)/(edge1-edge0), 1.f);
+	return t*t*(3.f-2.f*t);
+}
+
+float empiricalTwilightLimitForSunAltitude(const float sunAltitudeDeg)
+{
+	const float effectiveSunAltitudeDeg = qMin(sunAltitudeDeg, -0.85f);
+	return (effectiveSunAltitudeDeg > -7.7f)
+			? (-2.01f - 0.81f * effectiveSunAltitudeDeg)
+			: (2.78f - 0.18f * effectiveSunAltitudeDeg);
+}
+
+float empiricalSunVisibilityLimit(const float sunAltitudeDeg, const float solarEclipseFactor)
+{
+	const float twilightLimit = empiricalTwilightLimitForSunAltitude(sunAltitudeDeg);
+	constexpr float totalSolarEclipseLimit = 1.5f;
+	const float eclipseDarkness = 1.f -
+			smoothStep(0.f, 0.01f, qBound(0.f, solarEclipseFactor, 1.f));
+	const float eclipseLimit = twilightLimit +
+			(totalSolarEclipseLimit-twilightLimit) * eclipseDarkness;
+	return qMax(twilightLimit, eclipseLimit);
+}
+
+float empiricalMoonlightLuminance(const PlanetP& moon, const StelCore* core)
+{
+	if (!moon)
+		return 0.f;
+
+	Vec3d moonAltAz = moon->getAltAzPosAuto(core);
+	moonAltAz.normalize();
+	const float moonSinAlt = static_cast<float>(moonAltAz[2]);
+	const float horizonFade = smoothStep(-0.08f, 0.12f, moonSinAlt);
+	if (horizonFade <= 0.f)
+		return 0.f;
+
+	const float altitudeFactor = horizonFade *
+			qMin(1.f, std::sqrt(qMax(0.f, moonSinAlt)/0.70710678f));
+	if (altitudeFactor <= 0.f)
+		return 0.f;
+
+	const float moonMagnitude = moon->getVMagnitude(core);
+	if (!std::isfinite(moonMagnitude))
+		return 0.f;
+
+	constexpr float referenceFullMoonMagnitude = -12.73f;
+	constexpr float referenceFullMoonEquivalentSunAltitude = -11.f;
+	// Keep Stellarium's lunar magnitude curve, but compress its range for naked-eye visibility.
+	constexpr float moonlightMagnitudeResponseExponent = 0.75f;
+	const float referenceMoonLuminance = StelCore::nelmToLuminance(
+			empiricalTwilightLimitForSunAltitude(referenceFullMoonEquivalentSunAltitude));
+	const float moonFluxFactor = std::pow(10.f,
+										  -0.4f * (moonMagnitude-referenceFullMoonMagnitude));
+	const float adjustedMoonFluxFactor = moonFluxFactor<1.f ?
+			std::pow(moonFluxFactor, moonlightMagnitudeResponseExponent) : moonFluxFactor;
+	return referenceMoonLuminance * adjustedMoonFluxFactor * altitudeFactor;
+}
+}
 
 StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 	core(acore),
@@ -61,6 +127,7 @@ StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 	twinkleAmount(0.0),
 	flagDrawBigStarHalo(true),
 	flagStarSpiky(false),
+	flagEmpiricalStellarVisibility(false),
 	flagStarMagnitudeLimit(false),
 	flagNebulaMagnitudeLimit(false),
 	flagPlanetMagnitudeLimit(false),
@@ -68,6 +135,8 @@ StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 	starAbsoluteScaleF(1.),
 	starLinearScale(19.569f),
 	limitMagnitude(-100.f),
+	empiricalStellarMagnitudeOffset(0.f),
+	empiricalStellarLimitMagnitude(6.f),
 	limitLuminance(0.f),
 	customStarMagLimit(0.0),
 	customNebulaMagLimit(0.0),
@@ -94,6 +163,7 @@ StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 	setFlagForcedTwinkle(conf->value("stars/flag_forced_twinkle",false).toBool());
 	setFlagDrawBigStarHalo(conf->value("stars/flag_star_halo",true).toBool());
 	flagStarSpiky=(conf->value("stars/flag_star_spiky", false).toBool()); // too early to use the set method here!
+	setFlagEmpiricalStellarVisibility(conf->value("stars/flag_empirical_stellar_visibility", false).toBool());
 	setMaxAdaptFov(conf->value("stars/mag_converter_max_fov",70.0).toFloat());
 	setMinAdaptFov(conf->value("stars/mag_converter_min_fov",0.1).toFloat());
 	setFlagLuminanceAdaptation(conf->value("viewing/use_luminance_adaptation",true).toBool());
@@ -308,6 +378,41 @@ void StelSkyDrawer::update(double)
 
 	// update limit mag
 	limitMagnitude = computeLimitMagnitude();
+	empiricalStellarMagnitudeOffset = 0.f;
+	empiricalStellarLimitMagnitude = 6.f;
+	if (flagEmpiricalStellarVisibility && getFlagHasAtmosphere())
+	{
+		SolarSystem* solarSystem = GETSTELMODULE_SILENT(SolarSystem);
+		if (solarSystem && solarSystem->getSun())
+		{
+			Vec3d sunAltAz = solarSystem->getSun()->getAltAzPosAuto(core);
+			sunAltAz.normalize();
+			const PlanetP earth = solarSystem->getEarth();
+			const PlanetP currentPlanet = core->getCurrentPlanet();
+			const bool currentIsEarth = currentPlanet && earth &&
+					currentPlanet->getID() == earth->getID();
+			float skyGlowLuminance = static_cast<float>(lightPollutionLuminance);
+			if (currentIsEarth)
+				skyGlowLuminance += empiricalMoonlightLuminance(solarSystem->getMoon(), core);
+			const float solarEclipseFactor = static_cast<float>(solarSystem->getSolarEclipseFactor(core).first);
+			const float empiricalLimitMagnitude = empiricalStellarVisibilityLimit(sunAltAz,
+																				  skyGlowLuminance,
+																				  solarEclipseFactor);
+			empiricalStellarLimitMagnitude = empiricalLimitMagnitude;
+			const float currentLnFovFactor = lnfovFactor;
+			const float currentInputScale = eye->getInputScale();
+			const float referenceFov = qBound(minAdaptFov, 60.f, maxAdaptFov);
+			const float referencePowFactor = std::pow(60.f/qMax(0.7f, referenceFov), 0.8f);
+
+			eye->setInputScale(inScale*referencePowFactor);
+			lnfovFactor = std::log(1.f/50.f*2025000.f* 60.f*60.f / (referenceFov*referenceFov) / (EYE_RESOLUTION*EYE_RESOLUTION)/referencePowFactor/1.4f);
+			const float referenceLimitMagnitude = computeLimitMagnitude();
+			lnfovFactor = currentLnFovFactor;
+			eye->setInputScale(currentInputScale);
+
+			empiricalStellarMagnitudeOffset = qMax(0.f, qMin(referenceLimitMagnitude, 6.f) - empiricalLimitMagnitude);
+		}
+	}
 
 	// update limit luminance
 	limitLuminance = computeLimitLuminance();
@@ -436,6 +541,19 @@ bool StelSkyDrawer::computeRCMag(float mag, RCMag* rcMag) const
 	}
 	rcMag->radius *= StelApp::getInstance().getScreenScale();
 	return true;
+}
+
+float StelSkyDrawer::empiricalStellarVisibilityLimit(const Vec3d& sunAltAzPos,
+													 float skyLuminance,
+													 float solarEclipseFactor) const
+{
+	const double safeSunZ = qBound(-1.0, sunAltAzPos[2], 1.0);
+	const float sunAltitudeDeg = static_cast<float>(std::asin(safeSunZ) * M_180_PI);
+
+	const float twilightLimitedMagnitude = empiricalSunVisibilityLimit(sunAltitudeDeg,
+																	   solarEclipseFactor);
+	const float luminanceLimitedMagnitude = StelCore::luminanceToNELM(qMax(0.f, skyLuminance));
+	return qMin(qMin(twilightLimitedMagnitude, luminanceLimitedMagnitude), 6.0f);
 }
 
 void StelSkyDrawer::preDrawPointSource(StelPainter* p)
@@ -612,6 +730,9 @@ void StelSkyDrawer::drawSunCorona(StelPainter* painter, const Vec3d& posJ2000, d
 // Terminate drawing of a 3D model, draw the halo
 void StelSkyDrawer::postDrawSky3dModel(StelPainter* painter, const Vec3d& v, float illuminatedArea, float mag, const Vec3f& color, const bool isSun)
 {
+	if (!isSun)
+		mag += empiricalStellarMagnitudeOffset;
+
 	const float scale = StelApp::getInstance().getScreenScale();
 	const float pixPerRad = painter->getProjector()->getPixelPerRadAtCenter();
 	// Assume a disk shape
@@ -801,6 +922,16 @@ void StelSkyDrawer::setFlagStarSpiky(bool b)
 		flagStarSpiky=b;
 		StelApp::immediateSave("stars/flag_star_spiky", b);
 		emit flagStarSpikyChanged(flagStarSpiky);
+	}
+}
+
+void StelSkyDrawer::setFlagEmpiricalStellarVisibility(bool b)
+{
+	if (b!=flagEmpiricalStellarVisibility)
+	{
+		flagEmpiricalStellarVisibility=b;
+		StelApp::immediateSave("stars/flag_empirical_stellar_visibility", b);
+		emit flagEmpiricalStellarVisibilityChanged(flagEmpiricalStellarVisibility);
 	}
 }
 

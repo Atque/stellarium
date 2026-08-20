@@ -1,6 +1,6 @@
 /*
  * Stellarium
- * Copyright (C) 2015-2022 Alexander Wolf
+ * Copyright (C) 2015-2026 Alexander Wolf
  * Copyright (C) 2016 Nick Fedoseev (visualization of ephemeris)
  * Copyright (C) 2022 Georg Zotti
  * Copyright (C) 2022 Worachate Boonplod (Eclipses)
@@ -5637,8 +5637,20 @@ void AstroCalcDialog::drawAltVsTimeDiagram()
 		drawCurrentTimeDiagram();
 
 		// Transit line
-		QPair<double, double>transit=altVsTimeChart->findYMax(AstroCalcChart::AltVsTime);
-		altVsTimeChart->drawTrivialLineX(AstroCalcChart::TransitTime, transit.first);
+		if (isSatellite)
+		{
+			// approx. time of max. transit
+			QPair<double, double>transit=altVsTimeChart->findYMax(AstroCalcChart::AltVsTime);
+			altVsTimeChart->drawTrivialLineX(AstroCalcChart::TransitTime, transit.first);
+		}
+		else
+		{
+			Vec4d rts = selectedObject->getRTSTime(core);
+			double transitJD = rts[1];
+			if (transitJD > noon + 1.0)
+				transitJD -= 1.0; // approx. transit time
+			altVsTimeChart->drawTrivialLineX(AstroCalcChart::TransitTime, qreal(StelUtils::jdToQDateTime(transitJD, Qt::UTC).toMSecsSinceEpoch()));
+		}
 	}
 	else
 	{

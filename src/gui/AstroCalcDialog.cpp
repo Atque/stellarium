@@ -71,7 +71,7 @@
 
 #include <QtCharts/QtCharts>
 #if (QT_VERSION<QT_VERSION_CHECK(6,0,0))
-using namespace QtCharts;
+using namespace QtCharts;core->getCurrentLocation()
 #endif
 
 #include "AstroCalcDialog.hpp"
@@ -3484,24 +3484,23 @@ void AstroCalcDialog::showLocalCoordinates()
 	location = core->getCurrentLocation();	
 	float lat  = location.getLatitude();
 	float lon = location.getLongitude();
-	const QString degree = QChar(0x00B0);
-	QString pmc;
-	if (lat < 0.f)
-	{
-		pmc = qc_("S", "latitude");
-		lat *= -1.f;
-	}
+	QString pm;
+	if (lat >= 0)
+		pm = qc_("N", "latitude");
 	else
-		pmc = qc_("N", "latitude");
-	QString latStr = QString("%1%2%3").arg(pmc, QString::number(lat, 'f', 5), degree);
-	if (lon < 0.f)
 	{
-		pmc = qc_("W", "longitude");
-		lon *= -1.f;
+		pm = qc_("S", "latitude");
+		lat *= -1;
 	}
+	QString latStr = QString("%1%2%3").arg(pm, QString::number(lat, 'f', 5), QChar(0x00B0));
+	if (lon >= 0)
+		pm = qc_("E", "longitude");
 	else
-		pmc = qc_("E", "longitude");
-	QString lonStr = QString("%1%2%3").arg(pmc, QString::number(lon, 'f', 5), degree);
+	{
+		pm = qc_("W", "longitude");
+		lon *= -1;
+	}
+	QString lonStr = QString("%1%2%3").arg(pm, QString::number(lon, 'f', 5), QChar(0x00B0));
 
 	ui->localCoordinates->setText(QString("%1 %2").arg(latStr, lonStr));
 	ui->localCoordinates->setToolTip(location.name);

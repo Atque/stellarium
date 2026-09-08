@@ -422,6 +422,7 @@ void HipsSurvey::draw(StelPainter* sPainter, double angle, HipsSurvey::DrawCallb
 	// Set the projection.
 	StelCore* core = StelApp::getInstance().getCore();
 	StelSkyDrawer* drawer = core->getSkyDrawer();
+	const bool withTwilightVisibility = withAtmosphericExtinction && !planetarySurvey;
 	withAtmosphericExtinction = withAtmosphericExtinction && !planetarySurvey &&
 	                            drawer->getFlagHasAtmosphere() &&
 	                            drawer->getExtinction().getExtinctionCoefficient() >= 0.01f;
@@ -459,9 +460,14 @@ void HipsSurvey::draw(StelPainter* sPainter, double angle, HipsSurvey::DrawCallb
 			const float atmLum = qMax(0.f, landscapeMgr->getAtmosphereAverageLuminance() - lightPollutionLum);
 			const float modelFactor = landscapeMgr->getAtmosphereModel() == "showmysky" ? 0.2f : 1.f;
 			const float atmFactor = qMax(0.35f, 50.0f * (0.02f - modelFactor * atmLum));
-			extinctionColor *= atmFactor * atmFactor;
+			extinctionColor *= qMin(atmFactor * atmFactor,
+			                            drawer->getTwilightDiffuseVisibility());
 		}
 	}
+
+	// Contrast still applies when the extinction coefficient itself is zero.
+	if (withTwilightVisibility && !withAtmosphericExtinction)
+		extinctionColor *= drawer->getTwilightDiffuseVisibility();
 
 	const float displayOpacity = planetarySurvey ? 1.f : opacity;
 	sPainter->setColor(1, 1, 1, fader.getInterstate() * displayOpacity);

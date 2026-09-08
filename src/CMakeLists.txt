@@ -40,6 +40,7 @@ SET(stellarium_lib_SRCS
      core/StelProjectorType.hpp
      core/StelSkyDrawer.cpp
      core/StelSkyDrawer.hpp
+     core/StelTwilightVisibility.hpp
      core/StelPainter.hpp
      core/StelPainter.cpp
      core/MultiLevelJsonBase.hpp

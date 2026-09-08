@@ -387,7 +387,8 @@ void main(void)
 	//GETSTELMODULE(StelObjectMgr)->addToExtraInfoString(StelObject::DebugAid, QString("ZL AtmFactor: %1<br/>").arg(QString::number(atmFactor, 'f', 4)));
 	Q_ASSERT(atmFactor<=1.0f);
 	Q_ASSERT(atmFactor>=0.0f);
-	c*=atmFactor*atmFactor;
+	// Keep the stricter contrast limit, including existing moonlight effects.
+	c*=qMin(atmFactor*atmFactor, drawer->getTwilightDiffuseVisibility());
 
 	if (c[0]<0) c[0]=0;
 	if (c[1]<0) c[1]=0;

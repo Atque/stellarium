@@ -839,7 +839,7 @@ double NebulaMgr::getMaxSizeLimit() const
 
 float NebulaMgr::computeMaxMagHint(const StelSkyDrawer* skyDrawer) const
 {
-	return skyDrawer->getLimitMagnitude()*1.2f-2.f+static_cast<float>(hintsAmount *1.)-2.f;
+	return skyDrawer->getTwilightStarLimitMagnitude()*1.2f-2.f+static_cast<float>(hintsAmount *1.)-2.f;
 }
 
 // Draw all the Nebulae and call drawing the pointer if needed
@@ -867,7 +867,7 @@ void NebulaMgr::draw(StelCore* core)
 
 		// Print all the nebulae of all the selected zones
 		float maxMagHints  = computeMaxMagHint(skyDrawer);
-		float maxMagLabels = skyDrawer->getLimitMagnitude()-2.f+static_cast<float>(labelsAmount*1.2)-2.f;
+		float maxMagLabels = skyDrawer->getTwilightStarLimitMagnitude()-2.f+static_cast<float>(labelsAmount*1.2)-2.f;
 		DrawNebulaFuncObject func(maxMagHints, maxMagLabels, &sPainter, core, hintsFader.getInterstate()<=0.f);
 		nebGrid.processIntersectingPointInRegions(p.data(), func);
 	}

@@ -53,6 +53,9 @@ public:
 
 public:
 	virtual ~Atmosphere() = default;
+	//! Optional direct-light transmission in linear RGB. Angles are apparent radians,
+	//! observer altitude is in metres. False requests the legacy extinction fallback.
+	virtual bool getDirectTransmission(double, double, Vec3f&) const { return false; }
 	//! Compute sky brightness values and average luminance.
 	//! @param noScatter true to suppress the actual sky brightness modelling. This will keep refraction/extinction working for didactic reasons.
 	virtual void computeColor(StelCore* core, double JD, const Planet& currentPlanet, const Planet& sun, const Planet* moon,
@@ -88,6 +91,10 @@ public:
 	//! @return the last computed average luminance of the atmosphere in cd/m2.
 	float getAverageLuminance() const {return averageLuminance;}
 
+	//! Scattered moonlight alone, averaged over the rendered view, cd/m².
+	//! Excludes solar light, starlight and light pollution. Before atmosphere fading.
+	float getAverageMoonLuminance() const {return averageMoonLuminance;}
+
 	//! override computable luminance. This is for special operations only, e.g. for scripting of brightness-balanced image export.
 	//! To return to auto-computed values, set any negative value at the end of the script.
 	void setAverageLuminance(float overrideLum)
@@ -112,6 +119,7 @@ public:
 protected:
 	//! The average luminance of the atmosphere in cd/m2
 	float averageLuminance = 0;
+	float averageMoonLuminance = 0;
 	bool overrideAverageLuminance = false; // if true, don't compute but keep value set via setAverageLuminance(float)
 	float eclipseFactor = 1;
 	LinearFader fader;

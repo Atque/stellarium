@@ -288,6 +288,9 @@ bool StelSkyImageTile::drawTile(StelCore* core, StelPainter& sPainter, const Vec
 
 	// Draw the real texture for this image
 	float ad_lum = (luminance>0) ? qMin(1.0f, core->getToneReproducer()->adaptLuminanceScaled(luminance)) : 1.f;
+	// Sky images include the DSO photographs. Horizontal overlays are local.
+	if (getFrameType() != StelCore::FrameAltAz)
+		ad_lum *= core->getSkyDrawer()->getTwilightDiffuseVisibility();
 	Vec4f color;
 	if (alphaBlend || texFader->state()==QTimeLine::Running)
 	{

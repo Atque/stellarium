@@ -154,6 +154,7 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 				      const Planet*const moon, const StelLocation& location, const float temperature,
 				      const float relativeHumidity, const float extinctionCoefficient, const bool noScatter)
 {
+	averageMoonLuminance = 0.f;
 	const StelProjectorP prj = core->getProjection(StelCore::FrameAltAz, StelCore::RefractionOff);
 	if (viewport != prj->getViewport())
 	{
@@ -318,6 +319,7 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 
 	// Variables used to compute the average sky luminance
 	float sum_lum = 0.f;
+	float sum_moon_lum = 0.f;
 
 	Vec3d point(1., 0., 0.);
 	float lumi=0.f;
@@ -332,6 +334,7 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 		Q_ASSERT(fabs(point.normSquared()-1.0) < 1e-10);
 
 		Vec3f pointF=point.toVec3f();
+		float moonLuminance = 0.f;
 		if (!noScatter)
 		{
 			// Use mirroring for sun only
@@ -346,7 +349,7 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 			{
 				lumi = skyb.getLuminance(moonPosF[0]*pointF[0]+moonPosF[1]*pointF[1]+moonPosF[2]*pointF[2],
 							 sunPosF[0] *pointF[0]+sunPosF[1] *pointF[1]+sunPosF[2] *pointF[2],
-							 pointF[2]);
+							 pointF[2], &moonLuminance);
 			}
 			else // Experimental: Re-allow CIE/Preetham brightness instead.
 			{
@@ -371,6 +374,7 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 
 		// Store for later statistics
 		sum_lum+=lumi;
+		sum_moon_lum += moonLuminance*eclipseFactor;
 
 		// No need to compute the xy part of the color component
 		// This is done in the openGL shader
@@ -382,6 +386,8 @@ void AtmospherePreetham::computeColor(StelCore* core, const double JD, const Pla
 	colorGridBuffer.write(0, colorGrid.constData(), static_cast<int>((1+skyResolutionX)*(1+skyResolutionY)*4*4));
 	colorGridBuffer.release();
 	
+	if (!overrideAverageLuminance)
+		averageMoonLuminance = sum_moon_lum/static_cast<float>((1+skyResolutionX)*(1+skyResolutionY));
 	// Update average luminance
 	if (!overrideAverageLuminance)
 		averageLuminance = sum_lum/static_cast<float>((1+skyResolutionX)*(1+skyResolutionY));

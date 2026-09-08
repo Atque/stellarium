@@ -28,6 +28,7 @@
 #include "SolarSystem.hpp"
 #include "LandscapeMgr.hpp"
 #include "Planet.hpp"
+#include <array>
 #include "Orbit.hpp"
 #include "planetsephems/precession.h"
 #ifndef NDEBUG
@@ -3989,6 +3990,14 @@ void Planet::PlanetShaderVars::initLocations(QOpenGLShaderProgram* p)
 	GL(hasHorizonMap = p->uniformLocation("hasHorizonMap"));
 	GL(texCoordsFromFragment = p->uniformLocation("texCoordsFromFragment"));
 	GL(sphereScale = p->uniformLocation("sphereScale"));
+	GL(spectralExtinctionEnabled = p->uniformLocation("spectralExtinctionEnabled"));
+	GL(spectralExtinctionPerPixel = p->uniformLocation("spectralExtinctionPerPixel"));
+	GL(spectralExtinctionCenter = p->uniformLocation("spectralExtinctionCenter"));
+	GL(spectralExtinctionAltitudeRange = p->uniformLocation("spectralExtinctionAltitudeRange"));
+	GL(spectralExtinctionSamples = p->uniformLocation("spectralExtinctionSamples"));
+	GL(spectralExtinctionExposure = p->uniformLocation("spectralExtinctionExposure"));
+	GL(apparentAltAzPosIn = p->attributeLocation("apparentAltAzPosIn"));
+
 
 	// Moon-specific variables
 	GL(earthShadow = p->uniformLocation("earthShadow"));
@@ -4439,8 +4448,23 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 	// Find extinction settings to change colors. The method is rather ad-hoc.
 	// drawOnlyRing is only ever used when observing the own planet's rings. In this case extinction of the own planet's mag is set to zero. (#4619)
 	// (In a more complete solution we should treat the ring as extended object and compute extinction per vertex.)
+	static LandscapeMgr* extinctionLandscape = GETSTELMODULE(LandscapeMgr);
+	Vec3f spectralTransmission(1.f);
+	const Vec3d apparentPosition=getAltAzPosAuto(core);
+	const double apparentElevation=std::asin(qBound(-1., apparentPosition[2]/apparentPosition.norm(), 1.));
+	const bool spectralExtinction=!drawOnlyRing && extinctionLandscape->getAtmosphereTransmission(apparentElevation, spectralTransmission);
+	const float spectralLuminance=qMax(1.e-12f, 0.2126f*spectralTransmission[0]+0.7152f*spectralTransmission[1]+0.0722f*spectralTransmission[2]);
+	const float spectralMax=qMax(1.e-12f, qMax(spectralTransmission[0],qMax(spectralTransmission[1],spectralTransmission[2])));
+	const auto encodeSRGB=[](float c){return c<=0.0031308f ? 12.92f*c : 1.055f*std::pow(c,1.f/2.4f)-0.055f;};
+	const Vec3f spectralColor(encodeSRGB(spectralTransmission[0]/spectralMax),encodeSRGB(spectralTransmission[1]/spectralMax),encodeSRGB(spectralTransmission[2]/spectralMax));
+	// A partially risen disk may have a ground-blocked centre. Use the top limb
+	// as exposure reference so its visible part never divides by zero.
+	Vec3f upperTransmission=spectralTransmission;
+	if (spectralExtinction)
+		extinctionLandscape->getAtmosphereTransmission(qMin(M_PI_2,apparentElevation+getSpheroidAngularRadius(core)*M_PI_180),upperTransmission);
+	const float diskTransmissionMax=qMax(spectralMax,qMax(upperTransmission[0],qMax(upperTransmission[1],upperTransmission[2])));
 	const float vMagnitude=getVMagnitude(core, solarEclipseFactor);
-	const float vMagnitudeWithExtinction=(drawOnlyRing ? vMagnitude : getVMagnitudeWithExtinction(core, vMagnitude));
+	const float vMagnitudeWithExtinction=spectralExtinction ? vMagnitude-2.5f*std::log10(spectralLuminance) : (drawOnlyRing ? vMagnitude : getVMagnitudeWithExtinction(core, vMagnitude));
 
 	const float extinctedMag=vMagnitudeWithExtinction-vMagnitude; // this is net value of extinction, in mag.
 	const float magFactorGreen=powf(0.85f, 0.6f*extinctedMag);
@@ -4464,6 +4488,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 		// Find new extincted color for halo. The method is again rather ad-hoc, but does not look too bad.
 		// For the sun, we have again to use the stronger extinction to avoid color mismatch.
 		Vec3f color(haloColor[0], powf(0.75f, extinctedMag) * haloColor[1], powf(0.42f, 0.9f*extinctedMag) * haloColor[2]);
+		if (spectralExtinction) color=Vec3f(haloColor[0]*spectralColor[0],haloColor[1]*spectralColor[1],haloColor[2]*spectralColor[2]);
 
 		core->getSkyDrawer()->drawSunCorona(&sPainter, pos2000, getAngularRadius(core) * M_PI_180, color, alpha*alpha);
 	}
@@ -4481,6 +4506,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 		// Find new extincted color for halo. The method is again rather ad-hoc, but does not look too bad.
 		// For the sun, we have again to use the stronger extinction to avoid color mismatch.
 		Vec3f haloColorToDraw(haloColor[0], powf(0.75f, extinctedMag) * haloColor[1], powf(0.42f, 0.9f*extinctedMag) * haloColor[2]);
+		if (spectralExtinction) haloColorToDraw=Vec3f(haloColor[0]*spectralColor[0],haloColor[1]*spectralColor[1],haloColor[2]*spectralColor[2]);
 
 		float haloMag=qMin(-18.f, vMagnitudeWithExtinction); // for sun on horizon, mag can go quite low, shrinking the halo too much.
 		core->getSkyDrawer()->postDrawSky3dModel(&sPainter, tmp, surfArcMin2, haloMag, haloColorToDraw, isSun);
@@ -4526,6 +4552,11 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 		#endif
 		
 		StelPainterLight light;
+		light.spectralExtinction=spectralExtinction;
+		light.spectralTransmission=spectralTransmission;
+		// Preserve the existing solar display exposure, but retain relative
+		// transmission across the disk. RGB ratios are applied in linear space.
+		if (isSun) light.spectralExposure=1.f/diskTransmissionMax;
 
 		// Set the main source of light to be the sun.
 		// This must be the aberrated sun! (Mostly theoretically, this displacement seems more important for the shadows, done elsewhere...)
@@ -4573,6 +4604,32 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 			const float fov=core->getProjection(transfo)->getFov();
 			const float overbright=qBound(0.85f, 0.5f*fov, 2.0f); // scale full brightness to 0.85...2. (<2 when fov gets under 4 degrees)
 			sPainter.setColor(overbright, powf(0.75f, extinctedMag)*overbright, powf(0.42f, 0.9f*extinctedMag)*overbright);
+		}
+
+		if (spectralExtinction)
+		{
+			// Remove the legacy tint before applying the spectral transmission once,
+			// in the fragment shader, including earthshine and eclipse shadow light.
+			light.diffuse=Vec3f(light.diffuse[0]);
+			light.ambient=Vec3f(light.ambient[0]);
+			if (isSun)
+			{
+				const float overbright=sPainter.getColor()[0];
+				sPainter.setColor(overbright,overbright,overbright);
+			}
+			if (isMoon)
+			{
+				const float skyLum=extinctionLandscape->getAtmosphereAverageLuminance();
+				const float t=qBound(0.f, (std::log10(qMax(1.f,skyLum))-std::log10(20.f))/2.f,1.f);
+				const float daylight=t*t*(3.f-2.f*t);
+				// Keep familiar night exposure; in daylight retain absolute loss of
+				// direct moonlight. This is display adaptation, not extra absorption.
+				// The legacy lunar BRDF has an arbitrary display gain (50*albedo/pi).
+				// Keep the daylight exposure separate from physical atmospheric loss.
+				const float daylightScale=qBound(0.f,StelApp::getInstance().getSettings()->value(
+				    "landscape/showmysky_moon_daylight_scale",0.35f).toFloat(),1.f);
+				light.spectralExposure=(1.f-daylight)/diskTransmissionMax+daylight*daylightScale;
+			}
 		}
 
 		if (!survey || survey.colors->getInterstate() < 1.0f)
@@ -4639,6 +4696,7 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 			haloColorToDraw.set(haloColor[0], powf(0.75f, extinctedMag) * haloColor[1], powf(0.42f, 0.9f*extinctedMag) * haloColor[2]);
 		else
 			haloColorToDraw.set(haloColor[0], magFactorGreen * haloColor[1], magFactorBlue * haloColor[2]);
+		if (spectralExtinction) haloColorToDraw=Vec3f(haloColor[0]*spectralColor[0],haloColor[1]*spectralColor[1],haloColor[2]*spectralColor[2]);
 		if (isMoon)
 			haloColorToDraw*=0.6f; // make lunar halo less glaring, so that phase is discernible even if zoomed out.
 
@@ -4648,7 +4706,11 @@ void Planet::draw3dModel(StelCore* core, StelProjector::ModelViewTranformP trans
 			// EXPERIMENTAL: for sun on horizon, mag can go quite low, shrinking the halo too much.
 			if (isSun)
 				haloMag=qMin(haloMag, -18.f);
-			core->getSkyDrawer()->postDrawSky3dModel(&sPainter, tmp, surfArcMin2, haloMag, haloColorToDraw, isSun);
+			auto* drawer = core->getSkyDrawer();
+			if (!isSun && !isMoon && drawer->getFlagPlanetStarRendering())
+				drawer->drawPlanetPointSource(&sPainter, tmp, surfArcMin2, haloMag, haloColorToDraw);
+			else
+				drawer->postDrawSky3dModel(&sPainter, tmp, surfArcMin2, haloMag, haloColorToDraw, isSun);
 		}
 	}
 }
@@ -4929,6 +4991,31 @@ Planet::RenderData Planet::setCommonShaderUniforms(const StelPainter& painter, Q
 	                                                    static_cast<GLfloat>(data.eyePos[2])));
 	GL(shader->setUniformValue(shaderVars.diffuseLight, srgbToLinear(light.diffuse).toQVector()));
 	GL(shader->setUniformValue(shaderVars.ambientLight, srgbToLinear(light.ambient).toQVector()));
+	GL(shader->setUniformValue(shaderVars.spectralExtinctionEnabled, light.spectralExtinction));
+	GL(shader->setUniformValue(shaderVars.spectralExtinctionCenter, light.spectralTransmission.toQVector()));
+	GL(shader->setUniformValue(shaderVars.spectralExtinctionExposure, light.spectralExposure));
+	const bool perPixel=light.spectralExtinction && (this==sun || this==GETSTELMODULE(SolarSystem)->getMoon())
+	    && StelApp::getInstance().getSettings()->value("landscape/flag_showmysky_extinction_per_pixel",true).toBool();
+	GL(shader->setUniformValue(shaderVars.spectralExtinctionPerPixel, perPixel));
+	if (perPixel)
+	{
+		Vec3f center(0.f);
+		projector->getModelViewTransform()->forwardToAltAz(center);
+		const float centerAltitude=std::asin(qBound(-1.f,center[2]/center.norm(),1.f));
+		const float radius=qMin(float(M_PI_2),static_cast<float>(getSpheroidAngularRadius(core)*M_PI_180));
+		// Extra margin covers the distorted apparent disk and scaled Moon views.
+		const float low=qMax(float(-M_PI_2),centerAltitude-2.f*radius-0.01f);
+		const float high=qMin(float(M_PI_2),centerAltitude+2.f*radius+0.01f);
+		std::array<QVector3D,64> samples;
+		for (size_t i=0;i<samples.size();++i)
+		{
+			Vec3f rgb=light.spectralTransmission;
+			lmgr->getAtmosphereTransmission(low+(high-low)*i/(samples.size()-1),rgb);
+			samples[i]=rgb.toQVector();
+		}
+		GL(shader->setUniformValue(shaderVars.spectralExtinctionAltitudeRange,low,high));
+		GL(shader->setUniformValueArray(shaderVars.spectralExtinctionSamples,samples.data(),int(samples.size())));
+	}
 	GL(shader->setUniformValue(shaderVars.tex, 0));
 	GL(shader->setUniformValue(shaderVars.shadowCount, static_cast<GLint>(data.shadowCandidates.size())));
 	GL(shader->setUniformValue(shaderVars.shadowData, data.shadowCandidatesData));
@@ -5203,12 +5290,15 @@ void Planet::drawSphere(const StelPainterLight& light, StelPainter* painter, flo
 	Planet3DModel model;
 	sSphere(&model, static_cast<float>(equatorialRadius), static_cast<float>(oneMinusOblateness), nb_facet, nb_facet);
 
+	QVector<float> apparentAltAzArr(model.vertexArr.size());
 	QVector<float> projectedVertexArr(model.vertexArr.size());
 	for (int i=0;i<model.vertexArr.size()/3;++i)
 	{
 		Vec3f p = *(reinterpret_cast<const Vec3f*>(model.vertexArr.constData()+i*3));
 		p *= sphereScaleF;
 		painter->getProjector()->project(p, *(reinterpret_cast<Vec3f*>(projectedVertexArr.data()+i*3)));
+		painter->getProjector()->getModelViewTransform()->forwardToAltAz(p);
+		*(reinterpret_cast<Vec3f*>(apparentAltAzArr.data()+i*3))=p;
 	}
 	
 	static SolarSystem* ssm = GETSTELMODULE(SolarSystem);
@@ -5322,7 +5412,9 @@ void Planet::drawSphere(const StelPainterLight& light, StelPainter* painter, flo
 
 	const auto projectedVertArrSize = projectedVertexArr.size() * GLsizeiptr(sizeof projectedVertexArr[0]);
 
-	const auto modelVertArrOffset = projectedVertArrSize;
+	const auto apparentAltAzOffset=projectedVertArrSize;
+	const auto apparentAltAzSize=apparentAltAzArr.size()*GLsizeiptr(sizeof(float));
+	const auto modelVertArrOffset = apparentAltAzOffset+apparentAltAzSize;
 	const auto modelVertArrSize = model.vertexArr.size() * GLsizeiptr(sizeof model.vertexArr[0]);
 
 	const auto texCoordsOffset = modelVertArrOffset + modelVertArrSize;
@@ -5331,8 +5423,14 @@ void Planet::drawSphere(const StelPainterLight& light, StelPainter* painter, flo
 	const auto indicesOffset = texCoordsOffset + texCoordsSize;
 	const auto indicesSize = model.indiceArr.size() * GLsizeiptr(sizeof model.indiceArr[0]);
 
-	gl->glBufferData(GL_ARRAY_BUFFER, projectedVertArrSize+modelVertArrSize+texCoordsSize+indicesSize, nullptr, GL_STREAM_DRAW);
+	gl->glBufferData(GL_ARRAY_BUFFER, projectedVertArrSize+apparentAltAzSize+modelVertArrSize+texCoordsSize+indicesSize, nullptr, GL_STREAM_DRAW);
 	gl->glBufferSubData(GL_ARRAY_BUFFER, 0, projectedVertArrSize, projectedVertexArr.constData());
+	gl->glBufferSubData(GL_ARRAY_BUFFER, apparentAltAzOffset, apparentAltAzSize, apparentAltAzArr.constData());
+	if (shaderVars->apparentAltAzPosIn>=0)
+	{
+		shader->setAttributeBuffer(shaderVars->apparentAltAzPosIn,GL_FLOAT,apparentAltAzOffset,3);
+		shader->enableAttributeArray(shaderVars->apparentAltAzPosIn);
+	}
 	gl->glBufferSubData(GL_ARRAY_BUFFER, modelVertArrOffset, modelVertArrSize, model.vertexArr.constData());
 	gl->glBufferSubData(GL_ARRAY_BUFFER, texCoordsOffset, texCoordsSize, model.texCoordArr.constData());
 	gl->glBufferSubData(GL_ARRAY_BUFFER, indicesOffset, indicesSize, model.indiceArr.constData());
@@ -5480,6 +5578,7 @@ void Planet::drawSurvey(const StelPainterLight& light, StelCore* core, StelPaint
 
 	GL(shader->bind());
 	RenderData rData = setCommonShaderUniforms(*painter, shader, *shaderVars, light, !!survey.normals, !!survey.horizons, false);
+	QVector<Vec3f> apparentAltAzArray;
 	QVector<Vec3f> projectedVertsArray;
 	QVector<Vec3f> vertsArray;
 	const double angle = 2 * getSpheroidAngularRadius(core) * M_PI_180;
@@ -5514,11 +5613,15 @@ void Planet::drawSurvey(const StelPainterLight& light, StelCore* core, StelPaint
 
 	survey.colors->draw(painter, angle, [&](const QVector<Vec3d>& verts, const QVector<Vec2f>& tex,
 	                                        const QVector<uint16_t>& indices) {
+		apparentAltAzArray.resize(verts.size());
 		projectedVertsArray.resize(verts.size());
 		vertsArray.resize(verts.size());
 		for (int i = 0; i < verts.size(); i++)
 		{
 			Vec3d v = verts[i];
+			Vec3f apparent=v.toVec3f();
+			painter->getProjector()->getModelViewTransform()->forwardToAltAz(apparent);
+			apparentAltAzArray[i]=apparent;
 			painter->getProjector()->project(v, v);
 			projectedVertsArray[i] = v.toVec3f();
 			v = Mat4d::scaling(equatorialRadius) * verts[i];
@@ -5539,7 +5642,9 @@ void Planet::drawSurvey(const StelPainterLight& light, StelCore* core, StelPaint
 
 		const auto projectedVertArrSize = projectedVertsArray.size() * GLsizeiptr(sizeof projectedVertsArray[0]);
 
-		const auto modelVertArrOffset = projectedVertArrSize;
+		const auto apparentOffset=projectedVertArrSize;
+		const auto apparentSize=apparentAltAzArray.size()*GLsizeiptr(sizeof(Vec3f));
+		const auto modelVertArrOffset = apparentOffset+apparentSize;
 		const auto modelVertArrSize = vertsArray.size() * GLsizeiptr(sizeof vertsArray[0]);
 
 		const auto texCoordsOffset = modelVertArrOffset + modelVertArrSize;
@@ -5548,8 +5653,14 @@ void Planet::drawSurvey(const StelPainterLight& light, StelCore* core, StelPaint
 		const auto indicesOffset = texCoordsOffset + texCoordsSize;
 		const auto indicesSize = indices.size() * GLsizeiptr(sizeof indices[0]);
 
-		gl->glBufferData(GL_ARRAY_BUFFER, projectedVertArrSize+modelVertArrSize+texCoordsSize+indicesSize, nullptr, GL_STREAM_DRAW);
+		gl->glBufferData(GL_ARRAY_BUFFER, projectedVertArrSize+apparentSize+modelVertArrSize+texCoordsSize+indicesSize, nullptr, GL_STREAM_DRAW);
 		gl->glBufferSubData(GL_ARRAY_BUFFER, 0, projectedVertArrSize, projectedVertsArray.constData());
+		gl->glBufferSubData(GL_ARRAY_BUFFER, apparentOffset, apparentSize, apparentAltAzArray.constData());
+		if (shaderVars->apparentAltAzPosIn>=0)
+		{
+			shader->setAttributeBuffer(shaderVars->apparentAltAzPosIn,GL_FLOAT,apparentOffset,3);
+			shader->enableAttributeArray(shaderVars->apparentAltAzPosIn);
+		}
 		gl->glBufferSubData(GL_ARRAY_BUFFER, modelVertArrOffset, modelVertArrSize, vertsArray.constData());
 		gl->glBufferSubData(GL_ARRAY_BUFFER, texCoordsOffset, texCoordsSize, tex.constData());
 		gl->glBufferSubData(GL_ARRAY_BUFFER, indicesOffset, indicesSize, indices.constData());

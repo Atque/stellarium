@@ -378,6 +378,9 @@ AtmosphereShowMySky::AtmosphereShowMySky(const double initialAltitude)
 	}
 
 	resolveFunctions();
+	if (conf.value("landscape/flag_showmysky_extinction", true).toBool())
+		directTransmission_ = reinterpret_cast<DirectTransmission>(showMySkyLib.resolve("ShowMySky_directSolarTransmission_v1"));
+	qCInfo(Atmo) << "ShowMySky object extinction:" << (directTransmission_ ? "spectral transmission" : "legacy fallback");
 	try
 	{
 		const auto defaultPath = QDir::homePath() + "/cms";
@@ -723,6 +726,7 @@ void AtmosphereShowMySky::computeColor(StelCore* core, const double JD, const Pl
 		{
 			// GZ 20180114: Why did we add light pollution if atmosphere was not visible?????
 			// And what is the meaning of 0.001? Approximate contribution of stellar background? Then why is it 0.0001 below???
+			averageMoonLuminance = 0.f;
 			averageLuminance = 0.001f;
 			return;
 		}
@@ -738,6 +742,11 @@ void AtmosphereShowMySky::computeColor(StelCore* core, const double JD, const Pl
 		drawAtmosphere(prj->getProjectionMatrix(), sunAzimuth, sunZenithAngle, sunAngularRadius, moonAzimuth, moonZenithAngle, earthMoonDistance,
 		               location.altitude, sunRelativeBrightness, lightPollutionRelativeBrightness, airglowRelativeBrightness,
 		               eclipseFactor < 1, true);
+		// Measure before and after the existing additive lunar pass. Subtraction
+		// isolates actual model moonlight without counting twilight twice.
+		const bool measureMoon = moon && !noScatter && !overrideAverageLuminance;
+		const float solarMeanY = measureMoon ? getMeanPixelValue()[1] : 0.f;
+		averageMoonLuminance = 0.f;
 		const auto nonExtLunarMagnitude = moon ? moon->getVMagnitude(core) : 100.f;
 		const auto moonRelativeBrightness = noScatter ? 0.f : std::pow(10.f, 0.4f*(nonExtinctedSolarMagnitude-nonExtLunarMagnitude));
 		drawAtmosphere(prj->getProjectionMatrix(), moonAzimuth, moonZenithAngle, 0, 0, M_PI, 0, location.altitude,
@@ -749,6 +758,8 @@ void AtmosphereShowMySky::computeColor(StelCore* core, const double JD, const Pl
 			const auto meanY=meanPixelValue[1];
 			Q_ASSERT(std::isfinite(meanY));
 
+			if (measureMoon && std::isfinite(solarMeanY) && std::isfinite(meanY))
+				averageMoonLuminance = qMax(0.f, meanY - solarMeanY);
 			averageLuminance = meanY+0.0001f; // Add (assumed) star background luminance
 		}
 	}

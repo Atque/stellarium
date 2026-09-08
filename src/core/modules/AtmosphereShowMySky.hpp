@@ -54,12 +54,24 @@ public:
 					  float extinctionCoefficient, bool noScatter) override;
 	void draw(StelCore* core) override;
 	bool isLoading() const override;
+	bool getDirectTransmission(double altitude, double elevation, Vec3f& rgb) const override
+	{
+#ifdef ENABLE_SHOWMYSKY
+		return directTransmission_ && renderer_ && renderer_->isReadyToRender()
+		    && directTransmission_(renderer_.get(), altitude, elevation, rgb.v);
+#else
+		Q_UNUSED(altitude) Q_UNUSED(elevation) Q_UNUSED(rgb)
+		return false;
+#endif
+	}
 	bool isReadyToRender() const override;
 	LoadingStatus stepDataLoading() override;
 
 private:
 #ifdef ENABLE_SHOWMYSKY
 	QLibrary showMySkyLib;
+	using DirectTransmission = int (*)(const ShowMySky::AtmosphereRenderer*, double, double, float*);
+	DirectTransmission directTransmission_ = nullptr;
 	Vec4i viewport;
 	int gridMaxY,gridMaxX;
 	/*!	To achieve higher frame rates on slow systems,

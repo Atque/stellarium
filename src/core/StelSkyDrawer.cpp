@@ -34,6 +34,9 @@
 #include "StelModuleMgr.hpp"
 #include "LandscapeMgr.hpp"
 #include "Landscape.hpp"
+#include "SolarSystem.hpp"
+#include "Planet.hpp"
+#include "StelTwilightVisibility.hpp"
 
 #include <QOpenGLContext>
 #include <QOpenGLVertexArrayObject>
@@ -97,6 +100,15 @@ StelSkyDrawer::StelSkyDrawer(StelCore* acore) :
 	setMaxAdaptFov(conf->value("stars/mag_converter_max_fov",70.0).toFloat());
 	setMinAdaptFov(conf->value("stars/mag_converter_min_fov",0.1).toFloat());
 	setFlagLuminanceAdaptation(conf->value("viewing/use_luminance_adaptation",true).toBool());
+	flagTwilightVisibility = conf->value("viewing/flag_twilight_visibility", true).toBool();
+	flagPlanetStarRendering = conf->value("viewing/flag_planet_star_rendering", true).toBool();
+	flagMoonlightVisibility = conf->value("viewing/flag_moonlight_visibility", true).toBool();
+	moonlightVisibilityStrength = conf->value("viewing/moonlight_visibility_strength", 1.f).toFloat();
+	if (!std::isfinite(moonlightVisibilityStrength)) moonlightVisibilityStrength = 1.f;
+	moonlightVisibilityStrength = qBound(0.f, moonlightVisibilityStrength, 10.f);
+	twilightVisibilityStrength = conf->value("viewing/twilight_visibility_strength", 1.f).toFloat();
+	if (!std::isfinite(twilightVisibilityStrength)) twilightVisibilityStrength = 1.f;
+	twilightVisibilityStrength = qBound(0.f, twilightVisibilityStrength, 10.f);
 	setDaylightLabelThreshold(conf->value("viewing/sky_brightness_label_threshold", 250.0).toDouble());
 	setFlagStarMagnitudeLimit(conf->value("astro/flag_star_magnitude_limit", false).toBool());
 	setCustomStarMagnitudeLimit(conf->value("astro/star_magnitude_limit", 6.5).toDouble());
@@ -311,6 +323,55 @@ void StelSkyDrawer::update(double)
 
 	// update limit luminance
 	limitLuminance = computeLimitLuminance();
+	updateTwilightVisibility();
+}
+
+void StelSkyDrawer::updateTwilightVisibility()
+{
+	twilightStarMagnitudeLoss = 0.f;
+	twilightDiffuseVisibility = 1.f;
+	twilightSkyLuminance = 0.f;
+	moonlightSkyLuminance = 0.f;
+	const auto landscape = GETSTELMODULE(LandscapeMgr);
+	const auto solarSystem = GETSTELMODULE(SolarSystem);
+	if (!flagTwilightVisibility ||
+	    !getFlagHasAtmosphere() || !landscape || !solarSystem ||
+	    landscape->getFlagAtmosphereNoScatter() ||
+	    core->getCurrentPlanet() != solarSystem->getEarth())
+		return;
+
+	Vec3d sun = solarSystem->getSun()->getAltAzPosGeometric(core);
+	sun.normalize();
+	const float altitude = static_cast<float>(std::asin(qBound(-1., sun[2], 1.))*M_180_PI);
+	twilightSkyLuminance = StelTwilightVisibility::luminance(altitude) *
+	                      twilightVisibilityStrength * landscape->getAtmosphereFadeIntensity();
+	// Do not impose an uneclipsed daytime visibility floor during totality.
+	if (altitude > -5.f)
+		twilightSkyLuminance *= static_cast<float>(solarSystem->getSolarEclipseFactor(core).first);
+	if (flagMoonlightVisibility)
+		moonlightSkyLuminance = qMax(0.f, landscape->getAtmosphereMoonLuminance()) *
+		                        moonlightVisibilityStrength * landscape->getAtmosphereFadeIntensity();
+	// Add luminances before computing visibility. A fixed lunar penalty would
+	// erase stars even when twilight already overwhelms the scattered moonlight.
+	const float skyExcess = twilightSkyLuminance + moonlightSkyLuminance;
+	if (skyExcess <= 0.f)
+		return;
+
+	const float night = qMax(StelTwilightVisibility::darkSkyLuminance,
+	                         static_cast<float>(getLightPollutionLuminance()));
+	twilightDiffuseVisibility = StelTwilightVisibility::diffuseVisibility(skyExcess, night);
+	const float magnitudeLoss = StelTwilightVisibility::magnitudeLoss(skyExcess, night);
+
+	// Derive the night limit with the same FOV and user star/display scales.
+	// LandscapeMgr supplies the 3.75 + 3.5*sky adaptation baseline. Restore
+	// the shared eye immediately; neither sky nor Moon exposure is changed.
+	const float savedWorldLuminance = eye->getWorldAdaptationLuminance();
+	eye->setWorldAdaptationLuminance(3.75f + 3.5f*night);
+	const float nightLimit = computeLimitMagnitude();
+	eye->setWorldAdaptationLuminance(savedWorldLuminance);
+	// Use the stricter limit, retaining existing daylight/moonlight effects
+	// without charging twice for the twilight already in tone reproduction.
+	twilightStarMagnitudeLoss = qMax(0.f, limitMagnitude - (nightLimit - magnitudeLoss));
 }
 
 // Compute the current limit magnitude by dichotomy
@@ -610,6 +671,23 @@ void StelSkyDrawer::drawSunCorona(StelPainter* painter, const Vec3d& posJ2000, d
 }
 
 // Terminate drawing of a 3D model, draw the halo
+void StelSkyDrawer::drawPlanetPointSource(StelPainter* painter, const Vec3d& v, float illuminatedArea, float mag, const Vec3f& color)
+{
+	RCMag rcm;
+	// Use the same magnitude correction, size, textures and brightness as stars.
+	if (!computeRCMag(mag + getTwilightStarMagnitudeLoss(), &rcm)) return;
+	const float scale = StelApp::getInstance().getScreenScale();
+	const float pixPerRad = painter->getProjector()->getPixelPerRadAtCenter();
+	const float pixRadius = std::sqrt(illuminatedArea/(60.f*60.f)*M_PI_180f*M_PI_180f*(pixPerRad*pixPerRad))/M_PIf;
+	const float start = 3.f*scale, stop = 6.f*scale;
+	if (pixRadius >= stop) return;
+	// Multiply, so the zoom fade cannot brighten a faint source near its limit.
+	if (pixRadius > start) rcm.luminance *= (stop-pixRadius)/(stop-start);
+	preDrawPointSource(painter);
+	drawPointSource(painter, v, rcm, color, false, 0.f);
+	postDrawPointSource(painter);
+}
+
 void StelSkyDrawer::postDrawSky3dModel(StelPainter* painter, const Vec3d& v, float illuminatedArea, float mag, const Vec3f& color, const bool isSun)
 {
 	const float scale = StelApp::getInstance().getScreenScale();

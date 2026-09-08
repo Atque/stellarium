@@ -52,6 +52,15 @@ class StelSkyDrawer : public QObject, protected QOpenGLFunctions
 {
 	Q_OBJECT
 
+	Q_PROPERTY(bool flagPlanetStarRendering READ getFlagPlanetStarRendering WRITE setFlagPlanetStarRendering)
+	Q_PROPERTY(bool flagTwilightVisibility READ getFlagTwilightVisibility WRITE setFlagTwilightVisibility)
+	Q_PROPERTY(float twilightStarMagnitudeLoss READ getTwilightStarMagnitudeLoss)
+	Q_PROPERTY(float twilightDiffuseVisibility READ getTwilightDiffuseVisibility)
+	Q_PROPERTY(float twilightSkyLuminance READ getTwilightSkyLuminance)
+	Q_PROPERTY(bool flagMoonlightVisibility READ getFlagMoonlightVisibility WRITE setFlagMoonlightVisibility)
+	Q_PROPERTY(float moonlightSkyLuminance READ getMoonlightSkyLuminance)
+	Q_PROPERTY(float twilightStarLimitMagnitude READ getTwilightStarLimitMagnitude)
+
 	//! Sets how much brighter stars will be bigger than fainter stars
 	Q_PROPERTY(double relativeStarScale READ getRelativeStarScale WRITE setRelativeStarScale NOTIFY relativeStarScaleChanged)
 	//! The absolute star brightness scale
@@ -142,6 +151,12 @@ public:
 	//! @param isSun the object is the sun (will be drawn with different texture)
 	void postDrawSky3dModel(StelPainter* p, const Vec3d& v, float illuminatedArea, float mag, const Vec3f& color = Vec3f(1.f,1.f,1.f), const bool isSun=false);
 
+	//! Draw a planetary point source like a star, with the existing disk-size fade
+	//! and no scintillation. Sun and Earth's Moon retain their disk halo treatment.
+	void drawPlanetPointSource(StelPainter* p, const Vec3d& v, float illuminatedArea, float mag, const Vec3f& color);
+	bool getFlagPlanetStarRendering() const {return flagPlanetStarRendering;}
+	void setFlagPlanetStarRendering(bool enabled) {flagPlanetStarRendering = enabled;}
+
 	//! Compute RMag and CMag from magnitude.
 	//! @param mag the object integrated V magnitude
 	//! @param rcMag array of 2 floats containing the radius and luminance
@@ -230,6 +245,18 @@ public slots:
 	//! It depends on the zoom level, on the eye adaptation and on the point source rendering parameters
 	//! @return the limit V mag at which a point source will be displayed
 	float getLimitMagnitude() const {return limitMagnitude;}
+
+	//! Experimental contrast calibration for Earth twilight. Solar-system
+	//! disks/halos keep the original tone reproduction and magnitude limits.
+	bool getFlagTwilightVisibility() const {return flagTwilightVisibility;}
+	void setFlagTwilightVisibility(bool enabled) {flagTwilightVisibility = enabled;}
+	float getTwilightStarMagnitudeLoss() const {return twilightStarMagnitudeLoss;}
+	float getTwilightDiffuseVisibility() const {return twilightDiffuseVisibility;}
+	float getTwilightSkyLuminance() const {return twilightSkyLuminance;}
+	bool getFlagMoonlightVisibility() const {return flagMoonlightVisibility;}
+	void setFlagMoonlightVisibility(bool enabled) {flagMoonlightVisibility = enabled;}
+	float getMoonlightSkyLuminance() const {return moonlightSkyLuminance;}
+	float getTwilightStarLimitMagnitude() const {return limitMagnitude - twilightStarMagnitudeLoss;}
 
 	//! Toggle the application of user-defined star magnitude limit.
 	//! If enabled, stars fainter than the magnitude set with
@@ -464,6 +491,17 @@ private:
 	double starAbsoluteScaleF;
 
 	float starLinearScale;	// optimization variable
+
+	bool flagTwilightVisibility = true;
+	float twilightVisibilityStrength = 1.f;
+	bool flagPlanetStarRendering = true;
+	bool flagMoonlightVisibility = true;
+	float moonlightVisibilityStrength = 1.f;
+	float moonlightSkyLuminance = 0.f;
+	float twilightStarMagnitudeLoss = 0.f;
+	float twilightDiffuseVisibility = 1.f;
+	float twilightSkyLuminance = 0.f;
+	void updateTwilightVisibility();
 
 	//! Current magnitude limit for point sources
 	float limitMagnitude;

@@ -360,7 +360,8 @@ void main(void)
 		atmFactor=qMax(0.35f, 50.0f*(0.02f-atmLum)); // keep visible in twilight, but this is enough for some effect with the moon.
 	}
 	//omgr->addToExtraInfoString(StelObject::DebugAid, QString("AtmFactor: %1<br/>").arg(QString::number(atmFactor, 'f', 4)));
-	c*=atmFactor*atmFactor;
+	// Keep the stricter contrast limit, including existing moonlight effects.
+	c*=qMin(atmFactor*atmFactor, drawer->getTwilightDiffuseVisibility());
 
 	if (c[0]<0) c[0]=0;
 	if (c[1]<0) c[1]=0;

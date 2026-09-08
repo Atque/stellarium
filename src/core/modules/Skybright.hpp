@@ -67,7 +67,9 @@ public:
 	//! @param cosDistMoon cos(angular distance between moon and the position)
 	//! @param cosDistSun cos(angular distance between sun  and the position)
 	//! @param cosDistZenith cos(angular distance between zenith and the position)
-	float getLuminance(float cosDistMoon, const float cosDistSun, const float cosDistZenith) const;
+	//! @param moonLuminance optionally receive the lunar component alone, cd/m².
+	float getLuminance(float cosDistMoon, float cosDistSun, float cosDistZenith,
+	                   float* moonLuminance = nullptr) const;
 
 private:
 	float airMassMoon;  // Air mass for the Moon

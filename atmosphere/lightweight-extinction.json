@@ -1,0 +1,20 @@
+{
+  "format": "AtmoExt version 1, little endian",
+  "source_model": "/home/karl/LOKALA TESTER/stellar-visibility/stellarium-master/atmosphere/default",
+  "width": 256,
+  "height": 64,
+  "wavelengths": 16,
+  "earth_radius_m": 6371000.0,
+  "atmosphere_height_m": 120000.0,
+  "bytes": 1048800,
+  "sha256": "f4503e9601261e6c4cce321bafd1880bd8ea2013ab2da8587261d92221f8bec4",
+  "inputs": {
+    "atmosphere/default/params.atmo": "2ebe2ece750474ad109c314d3c76e00e39e64451b694349634f350812f354920",
+    "extinction-experiment/CalcMySky/common/cie-xyzw-functions.hpp": "05235c1c9aa02b40c60228d7475873286529850bce29383b0beadb4ea0db52b7",
+    "atmosphere/default/transmittance-wlset0.f32": "ca725638a0550f73529e2dbbeac190d6ad858aeae624091caa5c72e6c6602491",
+    "atmosphere/default/transmittance-wlset1.f32": "9af0221ad711c12d79ee92145d6772f536c88b76acff97a1027fc5f4d6dfb049",
+    "atmosphere/default/transmittance-wlset2.f32": "9e20a723e8340e5006cf23afa10653e09f6b40df34317548d83530d32092715a",
+    "atmosphere/default/transmittance-wlset3.f32": "925c76e1346e3352772b9e2bee60511e8431da0fdd7d2f2bc3e9d28754e4ec2a"
+  },
+  "description": "Original spectral optical depths; bilinear interpolation before exp(-tau); solar-weighted CIE 1931 XYZ to linear RGB, normalized to the model solar white. No scattering textures or GPU work required at runtime."
+}

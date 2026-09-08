@@ -100,8 +100,9 @@ void Skybright::setSunMoon(const float cosDistMoonZenith, const float cosDistSun
 //			cosDistZenith = cos(angular distance between zenith and the position)
 float Skybright::getLuminance( float cosDistMoon,
                                const float cosDistSun,
-                               const float cosDistZenith) const
+                               const float cosDistZenith, float* moonLuminance) const
 {
+	if (moonLuminance) *moonLuminance = 0.f;
 	// No Sun and Moon on the sky
 	// Details: https://bugs.launchpad.net/stellarium/+bug/1499699
 	static SolarSystem *ss=GETSTELMODULE(SolarSystem);
@@ -138,7 +139,10 @@ float Skybright::getLuminance( float cosDistMoon,
 		const float FM = 18886.28f / (dist_moon*dist_moon + 0.0005f)	// The last 0.0005 should be 0, but it causes too fast brightness change
 			+ stelpow10f(6.15f - dist_moon * 1.43239f)
 			+ 229086.77f * ( 1.06f + cosDistMoon*cosDistMoon );
-		b_total += bMoonTerm1 * (1.f - bKX) * (FM * C3 + 440000.f * (1.f - C3));
+		const float b_moon = bMoonTerm1 * (1.f - bKX) * (FM * C3 + 440000.f * (1.f - C3));
+		b_total += b_moon;
+		if (moonLuminance)
+			*moonLuminance = b_moon * (900900.9f * M_PIf * 1e-4f * 3239389.f*2.f *1.5f);
 	}
 	
 	// Dark night sky brightness, don't compute if less than 1% daylight
